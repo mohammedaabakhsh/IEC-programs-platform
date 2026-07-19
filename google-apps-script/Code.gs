@@ -1,22 +1,49 @@
 const SPREADSHEET_ID = '1tQL7hawesc00YbM2ig0rbiinmnhjr3VYOQ3-55Z0DKI';
-const API_VERSION = '2.0.1';
+const API_VERSION = '2.1.0';
 
-const SCHEMA = {
-  Programs: ['id','name','type','date','audience','participants','organizer','trainer','description','createdAt','updatedAt','deletedAt'],
-  Evaluations: ['id','programId','content','organization','trainer','goals','benefit','strengths','comment','createdAt'],
-  Attendance: ['id','programId','name','email','phone','createdAt'],
-  Users: ['email','name','role','active','createdAt','updatedAt'],
-  ActivityLog: ['id','action','details','actor','createdAt'],
-  Settings: ['key','value','updatedAt'],
-  KPI_Goals: ['year','programs','participants','satisfaction','response','updatedAt']
+const TABLES = {
+  Programs: {
+    title: 'البرامج',
+    keys: ['id','name','type','date','audience','participants','organizer','trainer','description','createdAt','updatedAt','deletedAt'],
+    headers: ['المعرّف','اسم البرنامج','نوع النشاط','التاريخ','الفئة المستهدفة','عدد المشاركين','الجهة المنظمة','المدرب أو مقدم الجلسة','الوصف','تاريخ الإنشاء','آخر تحديث','تاريخ الحذف']
+  },
+  Evaluations: {
+    title: 'التقييمات',
+    keys: ['id','programId','content','organization','trainer','goals','benefit','strengths','comment','createdAt'],
+    headers: ['المعرّف','معرّف البرنامج','المحتوى','التنظيم','المدرب','تحقق الأهداف','الاستفادة','نقاط القوة','الملاحظات','تاريخ الإرسال']
+  },
+  Attendance: {
+    title: 'الحضور',
+    keys: ['id','programId','name','email','phone','createdAt'],
+    headers: ['المعرّف','معرّف البرنامج','اسم المشارك','البريد الإلكتروني','رقم الجوال','تاريخ التسجيل']
+  },
+  Users: {
+    title: 'المستخدمون',
+    keys: ['email','name','role','active','createdAt','updatedAt'],
+    headers: ['البريد الإلكتروني','الاسم','الصلاحية','نشط','تاريخ الإنشاء','آخر تحديث']
+  },
+  ActivityLog: {
+    title: 'سجل النشاط',
+    keys: ['id','action','details','actor','createdAt'],
+    headers: ['المعرّف','الإجراء','التفاصيل','المنفذ','التاريخ']
+  },
+  Settings: {
+    title: 'الإعدادات',
+    keys: ['key','value','updatedAt'],
+    headers: ['المفتاح','القيمة','آخر تحديث']
+  },
+  KPI_Goals: {
+    title: 'أهداف المؤشرات',
+    keys: ['year','programs','participants','satisfaction','response','updatedAt'],
+    headers: ['السنة','هدف البرامج','هدف المشاركين','هدف الرضا','هدف الاستجابة','آخر تحديث']
+  }
 };
 
 function doGet(e) {
   try {
     setupDatabase_();
     const action = String((e && e.parameter && e.parameter.action) || 'health');
-    const payload = route_({ action, data: e && e.parameter ? e.parameter : {} });
-    return json_({ ok: true, version: API_VERSION, data: payload });
+    return json_({ ok: true, version: API_VERSION, data: route_({ action, data: e && e.parameter ? e.parameter : {} }) });
   } catch (error) {
     return json_({ ok: false, error: error.message, version: API_VERSION });
   }
@@ -25,9 +52,7 @@ function doGet(e) {
 function doPost(e) {
   try {
     setupDatabase_();
-    const body = parseBody_(e);
-    const payload = route_(body);
-    return json_({ ok: true, version: API_VERSION, data: payload });
+    return json_({ ok: true, version: API_VERSION, data: route_(parseBody_(e)) });
   } catch (error) {
     return json_({ ok: false, error: error.message, version: API_VERSION });
   }
@@ -54,27 +79,26 @@ function route_(request) {
     case 'goals.save': return saveGoals_(data);
     case 'activity.list': return listRows_('ActivityLog', true);
     case 'activity.add': return logActivity_(data.action, data.details, data.actor);
-    default: throw new Error('إجراء API غير معروف: ' + action);
+    default: throw new Error('إجراء غير معروف: ' + action);
   }
 }
 
 function setupDatabase_() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  Object.keys(SCHEMA).forEach(name => {
-    let sheet = ss.getSheetByName(name);
-    if (!sheet) sheet = ss.insertSheet(name);
-    const headers = SCHEMA[name];
-    if (sheet.getLastRow() === 0) {
-      sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
-      sheet.setFrozenRows(1);
-      sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold');
-      sheet.autoResizeColumns(1, headers.length);
-    } else {
-      const current = sheet.getRange(1, 1, 1, Math.max(sheet.getLastColumn(), headers.length)).getValues()[0];
-      headers.forEach((header, index) => {
-        if (current[index] !== header) sheet.getRange(1, index + 1).setValue(header);
-      });
+  Object.keys(TABLES).forEach(name => {
+    const config = TABLES[name];
+    let sheet = ss.getSheetByName(config.title);
+    const oldSheet = ss.getSheetByName(name);
+    if (!sheet && oldSheet) {
+      oldSheet.setName(config.title);
+      sheet = oldSheet;
     }
+    if (!sheet) sheet = ss.insertSheet(config.title);
+    sheet.setRightToLeft(true);
+    sheet.setFrozenRows(1);
+    sheet.getRange(1, 1, 1, config.headers.length).setValues([config.headers]);
+    sheet.getRange(1, 1, 1, config.headers.length).setFontWeight('bold').setHorizontalAlignment('right');
+    sheet.autoResizeColumns(1, config.headers.length);
   });
   const settings = settingsObject_();
   if (!settings.centerName) saveSettings_({ centerName: 'مركز الابتكار وريادة الأعمال' });
@@ -83,7 +107,7 @@ function setupDatabase_() {
 
 function health_() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  return {status:'ready',spreadsheetId:SPREADSHEET_ID,spreadsheetName:ss.getName(),sheets:Object.keys(SCHEMA),timestamp:new Date().toISOString()};
+  return { status: 'جاهز', spreadsheetId: SPREADSHEET_ID, spreadsheetName: ss.getName(), sheets: Object.values(TABLES).map(x => x.title), timestamp: new Date().toISOString() };
 }
 
 function bootstrap_() {
@@ -116,20 +140,19 @@ function saveProgram_(data) {
     updatedAt: now,
     deletedAt: ''
   };
-  if (existing) updateRow_('Programs', existing.row, entity);
-  else appendEntity_('Programs', entity);
+  if (existing) updateRow_('Programs', existing.row, entity); else appendEntity_('Programs', entity);
   logActivity_(existing ? 'تحديث برنامج' : 'إنشاء برنامج', entity.name, data.actor);
   return entity;
 }
 
 function softDeleteProgram_(id) {
-  if (!id) throw new Error('معرف البرنامج مطلوب');
+  if (!id) throw new Error('معرّف البرنامج مطلوب');
   const found = findRowByKey_('Programs', 'id', id);
   if (!found) throw new Error('البرنامج غير موجود');
   found.record.deletedAt = new Date().toISOString();
   found.record.updatedAt = found.record.deletedAt;
   updateRow_('Programs', found.row, found.record);
-  logActivity_('حذف برنامج', found.record.name, 'system');
+  logActivity_('حذف برنامج', found.record.name, 'النظام');
   return found.record;
 }
 
@@ -139,12 +162,12 @@ function restoreProgram_(id) {
   found.record.deletedAt = '';
   found.record.updatedAt = new Date().toISOString();
   updateRow_('Programs', found.row, found.record);
-  logActivity_('استعادة برنامج', found.record.name, 'system');
+  logActivity_('استعادة برنامج', found.record.name, 'النظام');
   return found.record;
 }
 
 function normalizeEvaluation_(data) {
-  if (!data.programId) throw new Error('معرف البرنامج مطلوب');
+  if (!data.programId) throw new Error('معرّف البرنامج مطلوب');
   return {
     id: String(data.id || Utilities.getUuid()),
     programId: String(data.programId),
@@ -160,18 +183,11 @@ function normalizeEvaluation_(data) {
 }
 
 function saveAttendance_(data) {
-  if (!data.programId) throw new Error('معرف البرنامج مطلوب');
+  if (!data.programId) throw new Error('معرّف البرنامج مطلوب');
   if (!String(data.name || '').trim()) throw new Error('اسم المشارك مطلوب');
   const existing = listRows_('Attendance', true).find(row => row.programId === String(data.programId) && String(row.name || '').trim().toLowerCase() === String(data.name).trim().toLowerCase());
   if (existing) throw new Error('المشارك مسجل مسبقًا');
-  return appendEntity_('Attendance', {
-    id: String(data.id || Utilities.getUuid()),
-    programId: String(data.programId),
-    name: String(data.name).trim(),
-    email: String(data.email || '').trim(),
-    phone: String(data.phone || '').trim(),
-    createdAt: new Date().toISOString()
-  });
+  return appendEntity_('Attendance', { id: String(data.id || Utilities.getUuid()), programId: String(data.programId), name: String(data.name).trim(), email: String(data.email || '').trim(), phone: String(data.phone || '').trim(), createdAt: new Date().toISOString() });
 }
 
 function saveSettings_(data) {
@@ -180,8 +196,7 @@ function saveSettings_(data) {
     if (key === 'action') return;
     const found = findRowByKey_('Settings', 'key', key);
     const entity = { key, value: typeof data[key] === 'string' ? data[key] : JSON.stringify(data[key]), updatedAt: now };
-    if (found) updateRow_('Settings', found.row, entity);
-    else appendEntity_('Settings', entity);
+    if (found) updateRow_('Settings', found.row, entity); else appendEntity_('Settings', entity);
   });
   return settingsObject_();
 }
@@ -198,71 +213,68 @@ function settingsObject_() {
 
 function saveGoals_(data) {
   const year = String(data.year || new Date().getFullYear());
-  const entity = {year,programs:Number(data.programs||0),participants:Number(data.participants||0),satisfaction:Number(data.satisfaction||0),response:Number(data.response||0),updatedAt:new Date().toISOString()};
+  const entity = { year, programs: Number(data.programs || 0), participants: Number(data.participants || 0), satisfaction: Number(data.satisfaction || 0), response: Number(data.response || 0), updatedAt: new Date().toISOString() };
   const found = findRowByKey_('KPI_Goals', 'year', year);
-  if (found) updateRow_('KPI_Goals', found.row, entity);
-  else appendEntity_('KPI_Goals', entity);
+  if (found) updateRow_('KPI_Goals', found.row, entity); else appendEntity_('KPI_Goals', entity);
   return entity;
 }
 
 function logActivity_(action, details, actor) {
-  return appendEntity_('ActivityLog', {id:Utilities.getUuid(),action:String(action||''),details:String(details||''),actor:String(actor||Session.getActiveUser().getEmail()||'system'),createdAt:new Date().toISOString()});
+  return appendEntity_('ActivityLog', { id: Utilities.getUuid(), action: String(action || ''), details: String(details || ''), actor: String(actor || Session.getActiveUser().getEmail() || 'النظام'), createdAt: new Date().toISOString() });
 }
 
-function listRows_(sheetName, includeDeleted) {
-  const sheet = sheet_(sheetName);
+function listRows_(tableName, includeDeleted) {
+  const sheet = sheet_(tableName);
+  const keys = TABLES[tableName].keys;
   if (sheet.getLastRow() < 2) return [];
-  const headers = SCHEMA[sheetName];
-  const values = sheet.getRange(2, 1, sheet.getLastRow() - 1, headers.length).getValues();
-  return values.map(row => rowToObject_(headers, row)).filter(row => includeDeleted || !row.deletedAt);
+  const values = sheet.getRange(2, 1, sheet.getLastRow() - 1, keys.length).getValues();
+  return values.map(row => rowToObject_(keys, row)).filter(row => includeDeleted || !row.deletedAt);
 }
 
-function filterByProgram_(sheetName, programId) {
-  const rows = listRows_(sheetName, true);
+function filterByProgram_(tableName, programId) {
+  const rows = listRows_(tableName, true);
   return programId ? rows.filter(row => row.programId === String(programId)) : rows;
 }
 
-function appendEntity_(sheetName, entity) {
-  const headers = SCHEMA[sheetName];
-  sheet_(sheetName).appendRow(headers.map(key => entity[key] == null ? '' : entity[key]));
+function appendEntity_(tableName, entity) {
+  const keys = TABLES[tableName].keys;
+  sheet_(tableName).appendRow(keys.map(key => entity[key] == null ? '' : entity[key]));
   return entity;
 }
 
-function updateRow_(sheetName, rowNumber, entity) {
-  const headers = SCHEMA[sheetName];
-  sheet_(sheetName).getRange(rowNumber, 1, 1, headers.length).setValues([headers.map(key => entity[key] == null ? '' : entity[key])]);
+function updateRow_(tableName, rowNumber, entity) {
+  const keys = TABLES[tableName].keys;
+  sheet_(tableName).getRange(rowNumber, 1, 1, keys.length).setValues([keys.map(key => entity[key] == null ? '' : entity[key])]);
 }
 
-function findRowByKey_(sheetName, key, value) {
-  const sheet = sheet_(sheetName);
-  const headers = SCHEMA[sheetName];
-  const keyIndex = headers.indexOf(key);
+function findRowByKey_(tableName, key, value) {
+  const sheet = sheet_(tableName);
+  const keys = TABLES[tableName].keys;
+  const keyIndex = keys.indexOf(key);
   if (keyIndex < 0 || sheet.getLastRow() < 2) return null;
-  const values = sheet.getRange(2, 1, sheet.getLastRow() - 1, headers.length).getValues();
-  for (let i = 0; i < values.length; i++) {
-    if (String(values[i][keyIndex]) === String(value)) return { row: i + 2, record: rowToObject_(headers, values[i]) };
-  }
+  const values = sheet.getRange(2, 1, sheet.getLastRow() - 1, keys.length).getValues();
+  for (let i = 0; i < values.length; i++) if (String(values[i][keyIndex]) === String(value)) return { row: i + 2, record: rowToObject_(keys, values[i]) };
   return null;
 }
 
-function rowToObject_(headers, row) {
-  return headers.reduce((obj, key, index) => {
+function rowToObject_(keys, row) {
+  return keys.reduce((obj, key, index) => {
     const value = row[index];
     obj[key] = value instanceof Date ? value.toISOString() : value;
     return obj;
   }, {});
 }
 
-function sheet_(name) {
-  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(name);
-  if (!sheet) throw new Error('ورقة غير موجودة: ' + name);
+function sheet_(tableName) {
+  const title = TABLES[tableName].title;
+  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(title);
+  if (!sheet) throw new Error('ورقة غير موجودة: ' + title);
   return sheet;
 }
 
 function parseBody_(e) {
   if (!e || !e.postData || !e.postData.contents) throw new Error('الطلب فارغ');
-  try { return JSON.parse(e.postData.contents); }
-  catch (_) { throw new Error('صيغة JSON غير صحيحة'); }
+  try { return JSON.parse(e.postData.contents); } catch (_) { throw new Error('صيغة البيانات غير صحيحة'); }
 }
 
 function numberBetween_(value, min, max) {
