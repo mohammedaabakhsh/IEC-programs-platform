@@ -17,6 +17,7 @@
     const source=db.programs.find(p=>p.id===id);if(!source)return;
     const copy=structuredClone(source);
     copy.id='PRG-'+Date.now();copy.name=source.name+' — نسخة';copy.date=new Date().toISOString().slice(0,10);copy.settings={...defaults,...copy.settings,archived:false};
+    delete copy.evaluationUrl;
     db.programs.unshift(copy);save();renderPrograms();renderDashboard();showToast('تم نسخ البرنامج دون التقييمات');openProgram(copy.id);
   };
   window.toggleEvaluation=id=>{const p=db.programs.find(x=>x.id===id);if(!p)return;ensureSettings(p);p.settings.evaluationOpen=!p.settings.evaluationOpen;save();showToast(p.settings.evaluationOpen?'تم فتح التقييم':'تم إغلاق التقييم');openProgram(id)};
@@ -32,7 +33,24 @@
   <article class="panel program-settings"><div class="panel-head"><div><small>التحكم بالنموذج</small><h3>إعدادات البرنامج</h3></div><button class="${p.settings.evaluationOpen?'danger-btn':'primary-btn'}" onclick="toggleEvaluation('${p.id}')">${p.settings.evaluationOpen?'إغلاق التقييم':'فتح التقييم'}</button></div><div class="settings-options"><label><input id="preventDuplicate" type="checkbox" ${p.settings.preventDuplicate?'checked':''}> منع التقييم المكرر على الجهاز نفسه</label><label><input id="showTrainer" type="checkbox" ${p.settings.showTrainer?'checked':''}> إظهار اسم المدرب</label><label><input id="showDescription" type="checkbox" ${p.settings.showDescription?'checked':''}> إظهار وصف البرنامج</label><label class="full-setting">رسالة الشكر<textarea id="thankYouMessage" rows="3">${escapeHtml(p.settings.thankYouMessage)}</textarea></label></div><div class="form-actions"><button class="secondary-btn" onclick="openProgramQuestionnaire('${p.id}')">تخصيص أسئلة التقييم</button><button class="primary-btn" onclick="saveProgramSettings('${p.id}')">حفظ الإعدادات</button></div></article>
   <div class="kpi-grid"><article class="kpi-card"><div><small>عدد الردود</small><strong>${m.list.length}</strong></div></article><article class="kpi-card"><div><small>نسبة الاستجابة</small><strong>${m.response}%</strong></div></article><article class="kpi-card"><div><small>متوسط الرضا</small><strong>${m.score?m.score.toFixed(2):'—'}</strong></div></article><article class="kpi-card"><div><small>الحالة</small><strong class="small-value">${s}</strong></div></article></div>${renderProgramResults(p,m.list)}`;navigate('program-details')};
 
-  const oldSubmit=document.querySelector('#programForm')?.onsubmit;
-  if(oldSubmit)document.querySelector('#programForm').onsubmit=e=>{const id=new FormData(e.currentTarget).get('id');oldSubmit(e);setTimeout(()=>{const p=db.programs.find(x=>x.id===id)||db.programs[0];if(p){ensureSettings(p);save()}},0)};
+  const form=document.querySelector('#programForm');
+  const oldSubmit=form?.onsubmit;
+  if(oldSubmit)form.onsubmit=e=>{
+    const fd=new FormData(e.currentTarget);
+    const id=String(fd.get('id')||'');
+    const previous=id?structuredClone(db.programs.find(x=>String(x.id)===id)||null):null;
+    oldSubmit(e);
+    setTimeout(()=>{
+      const p=db.programs.find(x=>String(x.id)===id)||db.programs[0];
+      if(!p)return;
+      if(previous){
+        p.settings=previous.settings;
+        p.questionnaireMode=previous.questionnaireMode;
+        p.questionnaire=previous.questionnaire;
+        p.evaluationUrl=p.evaluationUrl||previous.evaluationUrl;
+      }
+      ensureSettings(p);save();
+    },0);
+  };
   renderPrograms();
 })();
