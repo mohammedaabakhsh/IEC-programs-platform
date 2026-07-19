@@ -10,6 +10,7 @@
 
   const API_URL='https://script.google.com/macros/s/AKfycbzaruDNufAdhYJVZvuAGVMQzTvFGMfR2JSMNRZcuzPJRqqXbpeSB_xnieoRvpPKBqv4Pw/exec';
   const LOCAL_KEY=typeof DB_KEY==='string'?DB_KEY:'iec-platform-v2';
+  const FORM_SETUP_KEY='iec-google-form-setup-v1';
   let ready=false,syncing=false,pending=false;
   let snapshot={programs:[],evaluations:[],attendance:[],settings:{}};
   const originalSave=typeof save==='function'?save:null;
@@ -67,6 +68,12 @@
     if(actionDelete)for(const [id] of oldMap){if(!newMap.has(id))await request(actionDelete,{id})}
   }
 
+  async function ensureGoogleForm(){
+    if(localStorage.getItem(FORM_SETUP_KEY)==='done')return;
+    try{await request('forms.setup');localStorage.setItem(FORM_SETUP_KEY,'done')}
+    catch(error){console.warn('Google Form setup pending',error)}
+  }
+
   async function syncChanges(){
     if(!ready||syncing){pending=true;return}
     if(!navigator.onLine){pending=true;status('بانتظار عودة الإنترنت — محفوظ محليًا',false);return}
@@ -76,7 +83,9 @@
       await syncCollection('evaluations.save','evaluations.delete',snapshot.evaluations,db.evaluations||[]);
       await syncCollection('attendance.save','attendance.delete',snapshot.attendance,db.attendance||[]);
       if(changed(db.settings||{},snapshot.settings||{}))await request('settings.save',db.settings||{});
-      snapshot=snapshotNow();localStorage.setItem(LOCAL_KEY,JSON.stringify(db));status('متصل بقاعدة البيانات');
+      const cloud=await request('bootstrap');
+      applyCloud(cloud);
+      status('متصل بقاعدة البيانات');
     }catch(error){
       pending=true;console.error('Cloud sync failed',error);status('تعذر الحفظ السحابي — سيُعاد تلقائيًا',false);
       showToast?.('تعذر الاتصال مؤقتًا؛ التغييرات محفوظة على هذا الجهاز وستُرسل عند عودة الاتصال');
@@ -90,6 +99,7 @@
     request,
     refresh:async()=>{const cloud=await request('bootstrap');applyCloud(cloud);status('متصل بقاعدة البيانات')},
     sync:syncChanges,
+    setupEvaluationForm:async()=>{const result=await request('forms.setup');localStorage.setItem(FORM_SETUP_KEY,'done');return result},
     restoreProgram:async id=>{await request('programs.restore',{id});await window.IECCloud.refresh()},
     deleteProgramPermanent:async id=>{await request('programs.deletePermanent',{id});await window.IECCloud.refresh()},
     getState:()=>({ready,syncing,pending,online:navigator.onLine})
@@ -100,7 +110,10 @@
   window.addEventListener('beforeunload',e=>{if(syncing||pending){e.preventDefault();e.returnValue=''}});
 
   (async()=>{
-    try{status('جارٍ الاتصال بقاعدة البيانات…');const cloud=await request('bootstrap');applyCloud(cloud);ready=true;status('متصل بقاعدة البيانات')}
-    catch(error){console.error('Cloud initialization failed',error);ready=true;status('يعمل محليًا — تعذر الاتصال بقاعدة البيانات',false)}
+    try{
+      status('جارٍ الاتصال بقاعدة البيانات…');
+      await ensureGoogleForm();
+      const cloud=await request('bootstrap');applyCloud(cloud);ready=true;status('متصل بقاعدة البيانات');
+    }catch(error){console.error('Cloud initialization failed',error);ready=true;status('يعمل محليًا — تعذر الاتصال بقاعدة البيانات',false)}
   })();
 })();
