@@ -76,3 +76,5 @@
   const oldOpen=window.openProgram||openProgram;window.openProgram=function(id){oldOpen(id);setTimeout(enhanceProgramDetails,0)};
   setTimeout(()=>{ensureInsightsUI();renderInsights();if(currentProgramId)enhanceProgramDetails();const oldNav=window.navigate||navigate;window.navigate=function(id){oldNav(id);ensureInsightsUI();if(id==='dashboard')renderInsights();if(id==='program-details')setTimeout(enhanceProgramDetails,0)};},200);
 })();
+if(!document.querySelector('link[href="launch-features.css"]')){const l=document.createElement('link');l.rel='stylesheet';l.href='launch-features.css';document.head.appendChild(l)}
+if(!document.querySelector('script[src="launch-features.js"]')){const s=document.createElement('script');s.src='launch-features.js';document.body.appendChild(s)}
