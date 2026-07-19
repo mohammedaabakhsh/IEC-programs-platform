@@ -10,6 +10,7 @@
   const unavailable=document.querySelector('#evaluationUnavailable');
   const closeSuccess=document.querySelector('#closeEvaluationSuccess');
   const progress=document.querySelector('#evaluationProgressBar');
+  const confirmDelete=document.querySelector('#confirmDelete');
   let activeProgram=null;
 
   function setStep(step){
@@ -21,6 +22,18 @@
     [intro,formStep,success,unavailable].forEach(el=>el&&el.classList.remove('active'));
     intro.classList.add('active');
     formStep.classList.add('active');
+  }
+
+  function clearEvaluationRoute(){
+    if(location.hash.startsWith('#evaluate=')){
+      history.replaceState(null,'',location.pathname+location.search);
+    }
+  }
+
+  function closeEvaluation(){
+    modal.classList.remove('show');
+    clearEvaluationRoute();
+    activeProgram=null;
   }
 
   function fillProgram(p){
@@ -55,7 +68,11 @@
     modal.classList.add('show');
     form.reset();
     progress.style.width='0%';
-    if(!p){setStep(unavailable);return;}
+    if(!p){
+      setStep(unavailable);
+      clearEvaluationRoute();
+      return;
+    }
     activeProgram=p;
     currentProgramId=p.id;
     form.elements.programId.value=p.id;
@@ -88,10 +105,27 @@
     renderReports();
   };
 
-  closeBtn.onclick=()=>modal.classList.remove('show');
-  closeSuccess.onclick=()=>modal.classList.remove('show');
-  modal.onclick=e=>{if(e.target===modal)modal.classList.remove('show')};
+  closeBtn.onclick=closeEvaluation;
+  closeSuccess.onclick=closeEvaluation;
+  modal.onclick=e=>{if(e.target===modal)closeEvaluation()};
+
+  if(confirmDelete){
+    confirmDelete.addEventListener('click',()=>{
+      const deletedId=activeProgram?.id||currentProgramId;
+      setTimeout(()=>{
+        if(deletedId&&!db.programs.some(p=>p.id===deletedId)){
+          closeEvaluation();
+          currentProgramId=null;
+          navigate('programs');
+        }
+      },0);
+    });
+  }
 
   const hashMatch=location.hash.match(/^#evaluate=(.+)$/);
-  if(hashMatch)setTimeout(()=>window.openEvaluation(decodeURIComponent(hashMatch[1])),0);
+  if(hashMatch){
+    const id=decodeURIComponent(hashMatch[1]);
+    if(db.programs.some(p=>p.id===id))setTimeout(()=>window.openEvaluation(id),0);
+    else clearEvaluationRoute();
+  }
 })();
