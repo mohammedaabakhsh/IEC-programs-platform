@@ -10,6 +10,7 @@
 
   const API_URL='https://script.google.com/macros/s/AKfycbzaruDNufAdhYJVZvuAGVMQzTvFGMfR2JSMNRZcuzPJRqqXbpeSB_xnieoRvpPKBqv4Pw/exec';
   const LOCAL_KEY=typeof DB_KEY==='string'?DB_KEY:'iec-platform-v2';
+  const FORM_SETUP_KEY='iec-google-form-setup-v2';
   let ready=false,syncing=false,pending=false;
   let snapshot={programs:[],evaluations:[],attendance:[],settings:{}};
   const originalSave=typeof save==='function'?save:null;
@@ -54,18 +55,46 @@
     }));
   }
 
+  function mergeProgramLocalMetadata(cloudPrograms){
+    const localMap=mapById(db.programs||[]);
+    return (cloudPrograms||[]).map(program=>{
+      const local=localMap.get(String(program.id));
+      if(!local)return program;
+      return {
+        ...program,
+        ...(local.settings?{settings:local.settings}:{}),
+        ...(local.questionnaireMode?{questionnaireMode:local.questionnaireMode}:{}),
+        ...(Array.isArray(local.questionnaire)?{questionnaire:local.questionnaire}:{})
+      };
+    });
+  }
+
   function applyCloud(cloud){
     const localExtras={questionBank:db.questionBank,notifications:db.notifications,annualGoals:db.annualGoals,archives:db.archives};
-    db={...db,...localExtras,programs:cloud.programs||[],evaluations:cloud.evaluations||[],attendance:cloud.attendance||[],trash:makeTrash(cloud),settings:{...(db.settings||{}),...(cloud.settings||{})},goals:cloud.goals||[],activityLog:cloud.activityLog||[]};
+    const programs=mergeProgramLocalMetadata(cloud.programs||[]);
+    db={...db,...localExtras,programs,evaluations:cloud.evaluations||[],attendance:cloud.attendance||[],trash:makeTrash(cloud),settings:{...(db.settings||{}),...(cloud.settings||{})},goals:cloud.goals||[],activityLog:cloud.activityLog||[]};
     localStorage.setItem(LOCAL_KEY,JSON.stringify(db));
     snapshot=snapshotNow();renderAll();
-    window.dispatchEvent(new CustomEvent('iec-cloud-applied'));
   }
 
   async function syncCollection(actionSave,actionDelete,oldList,newList){
     const oldMap=mapById(oldList),newMap=mapById(newList);
     for(const [id,item] of newMap){if(!oldMap.has(id)||changed(item,oldMap.get(id)))await request(actionSave,item)}
     if(actionDelete)for(const [id] of oldMap){if(!newMap.has(id))await request(actionDelete,{id})}
+  }
+
+  async function ensureGoogleForm(){
+    try{
+      const formStatus=await request('forms.status');
+      if(formStatus?.ready){localStorage.setItem(FORM_SETUP_KEY,'done');return formStatus}
+      const result=await request('forms.setup');
+      localStorage.setItem(FORM_SETUP_KEY,'done');
+      return result;
+    }catch(error){
+      localStorage.removeItem(FORM_SETUP_KEY);
+      console.warn('Google Form setup pending',error);
+      return null;
+    }
   }
 
   async function syncChanges(){
@@ -77,7 +106,8 @@
       await syncCollection('evaluations.save','evaluations.delete',snapshot.evaluations,db.evaluations||[]);
       await syncCollection('attendance.save','attendance.delete',snapshot.attendance,db.attendance||[]);
       if(changed(db.settings||{},snapshot.settings||{}))await request('settings.save',db.settings||{});
-      applyCloud(await request('bootstrap'));
+      const cloud=await request('bootstrap');
+      applyCloud(cloud);
       status('متصل بقاعدة البيانات');
     }catch(error){
       pending=true;console.error('Cloud sync failed',error);status('تعذر الحفظ السحابي — سيُعاد تلقائيًا',false);
@@ -90,34 +120,42 @@
   window.IECCloud={
     apiUrl:API_URL,
     request,
-    refresh:async()=>{applyCloud(await request('bootstrap'));status('متصل بقاعدة البيانات')},
+    refresh:async()=>{const cloud=await request('bootstrap');applyCloud(cloud);status('متصل بقاعدة البيانات')},
     sync:syncChanges,
-    setupEvaluationForm:()=>request('forms.setup'),
-    evaluationFormStatus:()=>request('forms.status'),
+    setupEvaluationForm:async()=>ensureGoogleForm(),
     restoreProgram:async id=>{await request('programs.restore',{id});await window.IECCloud.refresh()},
     deleteProgramPermanent:async id=>{await request('programs.deletePermanent',{id});await window.IECCloud.refresh()},
     getState:()=>({ready,syncing,pending,online:navigator.onLine})
   };
 
+  const legacyOpenEvaluation=window.openEvaluation;
   const legacyOpenProgram=window.openProgram;
   const evaluationUrl=id=>{
     const program=(db.programs||[]).find(item=>String(item.id)===String(id));
     return program?.evaluationUrl||'';
   };
 
-  window.openEvaluation=id=>{
-    const url=evaluationUrl(id);
+  window.openEvaluation=async id=>{
+    let url=evaluationUrl(id);
+    if(!url&&navigator.onLine){
+      try{await syncChanges();await window.IECCloud.refresh();url=evaluationUrl(id)}catch(error){console.warn('Evaluation link refresh failed',error)}
+    }
     if(url){window.open(url,'_blank','noopener,noreferrer');return}
-    showToast?.('رابط Google Form لم يجهز بعد، أعد المحاولة بعد لحظات');
-    window.IECCloud.sync();
+    if(typeof legacyOpenEvaluation==='function'&&!navigator.onLine){legacyOpenEvaluation(id);return}
+    showToast?.('تعذر تجهيز رابط Google Form حاليًا');
   };
 
   window.shareLink=async id=>{
     const program=(db.programs||[]).find(item=>String(item.id)===String(id));
-    const url=program?.evaluationUrl||'';
-    if(!url){showToast?.('رابط Google Form لم يجهز بعد');window.IECCloud.sync();return}
-    if(navigator.share)await navigator.share({title:`تقييم ${program.name}`,text:'نرجو تقييم مشاركتكم في البرنامج',url});
-    else{await navigator.clipboard.writeText(url);showToast?.('تم نسخ رابط Google Form للمشاركة')}
+    let url=program?.evaluationUrl||'';
+    if(!url){
+      try{await syncChanges();await window.IECCloud.refresh();url=evaluationUrl(id)}catch(error){console.warn('Share link refresh failed',error)}
+    }
+    if(!url){showToast?.('رابط Google Form لم يجهز بعد');return}
+    try{
+      if(navigator.share)await navigator.share({title:`تقييم ${program.name}`,text:'نرجو تقييم مشاركتكم في البرنامج',url});
+      else{await navigator.clipboard.writeText(url);showToast?.('تم نسخ رابط Google Form للمشاركة')}
+    }catch(error){if(error?.name!=='AbortError')showToast?.('تعذرت مشاركة الرابط')}
   };
 
   window.openProgram=id=>{
@@ -131,7 +169,7 @@
     const buttons=linkCard.querySelectorAll('.inline-actions button');
     if(input)input.value=url;
     if(qr)qr.src=`https://quickchart.io/qr?size=180&text=${encodeURIComponent(url)}`;
-    if(buttons[0])buttons[0].onclick=async()=>{await navigator.clipboard.writeText(url);showToast?.('تم نسخ رابط Google Form')};
+    if(buttons[0])buttons[0].onclick=async()=>{try{await navigator.clipboard.writeText(url);showToast?.('تم نسخ رابط Google Form')}catch(error){showToast?.('تعذر نسخ الرابط')}};
     if(buttons[1])buttons[1].onclick=()=>window.shareLink(id);
   };
 
@@ -143,7 +181,10 @@
   window.addEventListener('beforeunload',e=>{if(syncing||pending){e.preventDefault();e.returnValue=''}});
 
   (async()=>{
-    try{status('جارٍ الاتصال بقاعدة البيانات…');applyCloud(await request('bootstrap'));ready=true;status('متصل بقاعدة البيانات')}
-    catch(error){console.error('Cloud initialization failed',error);ready=true;status('يعمل محليًا — تعذر الاتصال بقاعدة البيانات',false)}
+    try{
+      status('جارٍ الاتصال بقاعدة البيانات…');
+      await ensureGoogleForm();
+      const cloud=await request('bootstrap');applyCloud(cloud);ready=true;status('متصل بقاعدة البيانات');
+    }catch(error){console.error('Cloud initialization failed',error);ready=true;status('يعمل محليًا — تعذر الاتصال بقاعدة البيانات',false)}
   })();
 })();
