@@ -1,11 +1,12 @@
 const SPREADSHEET_ID = '1tQL7hawesc00YbM2ig0rbiinmnhjr3VYOQ3-55Z0DKI';
-const API_VERSION = '2.4.1';
+const MASTER_EVALUATION_FORM_ID = '1M9hTHW6AMfBLDEh_x2G2EVD373lXLzl9S1h9MlOeiaI';
+const API_VERSION = '2.5.0';
 
 const TABLES = {
   Programs: {
     title: 'البرامج',
-    keys: ['id','name','type','date','audience','participants','organizer','trainer','description','createdAt','updatedAt','deletedAt'],
-    headers: ['المعرّف','اسم البرنامج','نوع النشاط','التاريخ','الفئة المستهدفة','عدد المشاركين','الجهة المنظمة','المدرب أو مقدم الجلسة','الوصف','تاريخ الإنشاء','آخر تحديث','تاريخ الحذف']
+    keys: ['id','name','type','date','audience','participants','organizer','trainer','description','evaluationUrl','createdAt','updatedAt','deletedAt'],
+    headers: ['المعرّف','اسم البرنامج','نوع النشاط','التاريخ','الفئة المستهدفة','عدد المشاركين','الجهة المنظمة','المدرب أو مقدم الجلسة','الوصف','رابط نموذج التقييم','تاريخ الإنشاء','آخر تحديث','تاريخ الحذف']
   },
   Evaluations: {
     title: 'التقييمات',
@@ -60,6 +61,8 @@ function route_(request) {
     case 'health': return health_();
     case 'bootstrap': return bootstrap_();
     case 'setup': setupDatabase_(); return health_();
+    case 'forms.setup': return setupEvaluationForm_();
+    case 'forms.status': return evaluationFormStatus_();
     case 'programs.list': return listRows_('Programs', false);
     case 'programs.deleted': return listRows_('Programs', true).filter(row => row.deletedAt);
     case 'programs.save': return saveProgram_(data);
@@ -85,7 +88,6 @@ function route_(request) {
 function setupDatabase_() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   removeLegacyUsersSheets_(ss);
-
   Object.keys(TABLES).forEach(name => {
     const config = TABLES[name];
     let sheet = ss.getSheetByName(config.title);
@@ -97,7 +99,6 @@ function setupDatabase_() {
     sheet.getRange(1, 1, 1, config.headers.length).setValues([config.headers]);
     sheet.getRange(1, 1, 1, config.headers.length).setFontWeight('bold').setHorizontalAlignment('right');
   });
-
   const settings = settingsObject_();
   if (!settings.centerName) saveSettings_({ centerName: 'مركز الابتكار وريادة الأعمال' });
   if (!settings.universityName) saveSettings_({ universityName: 'جامعة الملك عبدالعزيز' });
@@ -112,7 +113,7 @@ function removeLegacyUsersSheets_(ss) {
 
 function health_() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  return { status: 'جاهز', version: API_VERSION, spreadsheetId: SPREADSHEET_ID, spreadsheetName: ss.getName(), sheets: Object.values(TABLES).map(x => x.title), timestamp: new Date().toISOString() };
+  return { status: 'جاهز', version: API_VERSION, spreadsheetId: SPREADSHEET_ID, spreadsheetName: ss.getName(), sheets: Object.values(TABLES).map(x => x.title), form: evaluationFormStatus_(), timestamp: new Date().toISOString() };
 }
 
 function bootstrap_() {
@@ -142,10 +143,13 @@ function saveProgram_(data) {
     organizer: String(data.organizer || '').trim(),
     trainer: String(data.trainer || '').trim(),
     description: String(data.description || '').trim(),
+    evaluationUrl: '',
     createdAt: existing ? existing.record.createdAt : now,
     updatedAt: now,
     deletedAt: ''
   };
+  try { entity.evaluationUrl = buildEvaluationUrl_(entity); }
+  catch (error) { entity.evaluationUrl = String((existing && existing.record.evaluationUrl) || data.evaluationUrl || ''); }
   if (existing) updateRow_('Programs', existing.row, entity); else appendEntity_('Programs', entity);
   logActivity_(existing ? 'تحديث برنامج' : 'إنشاء برنامج', entity.name, data.actor);
   return entity;
@@ -169,6 +173,7 @@ function restoreProgram_(id) {
   if (!found) throw new Error('البرنامج غير موجود');
   found.record.deletedAt = '';
   found.record.updatedAt = new Date().toISOString();
+  if (!found.record.evaluationUrl) found.record.evaluationUrl = buildEvaluationUrl_(found.record);
   updateRow_('Programs', found.row, found.record);
   logActivity_('استعادة برنامج', found.record.name, 'النظام');
   return found.record;
@@ -255,6 +260,99 @@ function saveGoals_(data) {
   const found = findRowByKey_('KPI_Goals', 'year', year);
   if (found) updateRow_('KPI_Goals', found.row, entity); else appendEntity_('KPI_Goals', entity);
   return entity;
+}
+
+function setupEvaluationForm_() {
+  const form = FormApp.openById(MASTER_EVALUATION_FORM_ID);
+  const programItems = ensureProgramItems_(form);
+  ScriptApp.getProjectTriggers().filter(trigger => trigger.getHandlerFunction() === 'onGoogleFormSubmit_').forEach(trigger => ScriptApp.deleteTrigger(trigger));
+  ScriptApp.newTrigger('onGoogleFormSubmit_').forForm(form).onFormSubmit().create();
+  saveSettings_({ evaluationFormId: MASTER_EVALUATION_FORM_ID, evaluationFormUrl: form.getPublishedUrl(), evaluationFormSetupAt: new Date().toISOString() });
+  return { ready: true, formId: MASTER_EVALUATION_FORM_ID, publishedUrl: form.getPublishedUrl(), programIdItem: programItems.id.getId(), programNameItem: programItems.name.getId() };
+}
+
+function evaluationFormStatus_() {
+  try {
+    const form = FormApp.openById(MASTER_EVALUATION_FORM_ID);
+    const triggers = ScriptApp.getProjectTriggers().filter(trigger => trigger.getHandlerFunction() === 'onGoogleFormSubmit_');
+    return { ready: triggers.length > 0, title: form.getTitle(), publishedUrl: form.getPublishedUrl(), triggerCount: triggers.length };
+  } catch (error) {
+    return { ready: false, error: error.message };
+  }
+}
+
+function ensureProgramItems_(form) {
+  let idItem = null, nameItem = null;
+  form.getItems(FormApp.ItemType.TEXT).forEach(item => {
+    const title = normalizeTitle_(item.getTitle());
+    if (title === normalizeTitle_('معرّف البرنامج')) idItem = item.asTextItem();
+    if (title === normalizeTitle_('اسم البرنامج')) nameItem = item.asTextItem();
+  });
+  if (!idItem) idItem = form.addTextItem().setTitle('معرّف البرنامج').setHelpText('يُعبأ تلقائيًا من منصة المركز، يرجى عدم تعديله.').setRequired(true);
+  if (!nameItem) nameItem = form.addTextItem().setTitle('اسم البرنامج').setHelpText('يُعبأ تلقائيًا من منصة المركز.').setRequired(true);
+  return { id: idItem, name: nameItem };
+}
+
+function buildEvaluationUrl_(program) {
+  const form = FormApp.openById(MASTER_EVALUATION_FORM_ID);
+  const items = ensureProgramItems_(form);
+  return form.createResponse()
+    .withItemResponse(items.id.createResponse(String(program.id)))
+    .withItemResponse(items.name.createResponse(String(program.name)))
+    .toPrefilledUrl();
+}
+
+function onGoogleFormSubmit_(e) {
+  if (!e || !e.response) throw new Error('لم يتم استلام رد النموذج');
+  const responses = e.response.getItemResponses().map(itemResponse => ({
+    title: String(itemResponse.getItem().getTitle() || ''),
+    normalized: normalizeTitle_(itemResponse.getItem().getTitle()),
+    answer: itemResponse.getResponse()
+  }));
+  const answerFor = aliases => {
+    const normalizedAliases = aliases.map(normalizeTitle_);
+    const found = responses.find(response => normalizedAliases.some(alias => response.normalized.indexOf(alias) !== -1));
+    return found ? found.answer : '';
+  };
+  let programId = String(answerFor(['معرّف البرنامج','معرف البرنامج','رقم البرنامج']) || '').trim();
+  if (!programId) {
+    const programName = String(answerFor(['اسم البرنامج','اسم النشاط']) || '').trim();
+    const matches = listRows_('Programs', false).filter(program => String(program.name).trim() === programName);
+    if (matches.length === 1) programId = matches[0].id;
+  }
+  if (!programId || !findRowByKey_('Programs', 'id', programId)) throw new Error('تعذر تحديد البرنامج المرتبط بالتقييم');
+
+  const scoreAliases = {
+    content: ['الرضا عن المحتوى','المحتوى','محتوى البرنامج'],
+    organization: ['الرضا عن التنظيم','التنظيم','تنظيم البرنامج'],
+    trainer: ['تقييم المدرب','المدرب','مقدم الجلسة'],
+    goals: ['مدى تحقق الأهداف','تحقق الأهداف','الأهداف'],
+    benefit: ['الاستفادة المتوقعة','الاستفادة','الفائدة']
+  };
+  const values = {};
+  Object.keys(scoreAliases).forEach(key => values[key] = Number(answerFor(scoreAliases[key])) || 0);
+  const numericAnswers = responses.map(response => Number(response.answer)).filter(value => Number.isFinite(value) && value >= 1 && value <= 5);
+  let fallbackIndex = 0;
+  Object.keys(scoreAliases).forEach(key => { if (!values[key]) values[key] = numericAnswers[fallbackIndex++]; });
+
+  const timestamp = e.response.getTimestamp ? e.response.getTimestamp() : new Date();
+  const responseId = e.response.getId ? e.response.getId() : Utilities.getUuid();
+  saveEvaluation_({
+    id: 'GFORM-' + responseId,
+    programId,
+    content: values.content,
+    organization: values.organization,
+    trainer: values.trainer,
+    goals: values.goals,
+    benefit: values.benefit,
+    strengths: answerFor(['نقاط القوة','أبرز نقاط القوة','ما الذي أعجبك']),
+    comment: answerFor(['الملاحظات والمقترحات','الملاحظات','المقترحات','اقتراحاتك']),
+    createdAt: timestamp instanceof Date ? timestamp.toISOString() : String(timestamp)
+  });
+}
+
+function normalizeTitle_(value) {
+  return String(value || '').toLowerCase().replace(/[ًٌٍَُِّْـ]/g, '').replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي').replace(/[^\u0600-\u06FFa-z0-9]+/g, ' ').trim();
 }
 
 function logActivity_(action, details, actor) {
