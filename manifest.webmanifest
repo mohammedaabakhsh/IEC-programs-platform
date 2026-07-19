@@ -1,0 +1,13 @@
+{
+  "name": "منصة برامج مركز الابتكار وريادة الأعمال",
+  "short_name": "منصة البرامج",
+  "description": "إدارة البرامج والتقييمات والتقارير لمركز الابتكار وريادة الأعمال",
+  "lang": "ar",
+  "dir": "rtl",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f4f7f3",
+  "theme_color": "#356b3d",
+  "categories": ["business", "education", "productivity"]
+}
