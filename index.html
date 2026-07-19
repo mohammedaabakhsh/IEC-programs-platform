@@ -8,6 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="evaluation-v2.css" />
 </head>
 <body>
 <div class="app-shell">
@@ -94,9 +95,64 @@
   </main>
 </div>
 
-<div class="modal" id="evaluationModal"><div class="modal-card"><button class="modal-close" id="closeModal">×</button><p class="eyebrow">نموذج المستفيد</p><h2 id="evaluationTitle">تقييم البرنامج</h2><p>نقدّر مشاركتك. يستغرق التقييم أقل من دقيقة.</p><form id="evaluationForm"><input type="hidden" name="programId" /><div class="evaluation-preview" id="ratingQuestions"></div><label>أبرز نقاط القوة<textarea name="strengths" placeholder="ما الذي أعجبك؟"></textarea></label><label>ملاحظات أو مقترحات<textarea name="comment" placeholder="اكتب ملاحظتك هنا..."></textarea></label><button class="primary-btn wide" type="submit">إرسال التقييم</button></form></div></div>
+<div class="modal" id="evaluationModal">
+  <div class="modal-card evaluation-modal-card">
+    <button class="modal-close" id="closeModal">×</button>
+    <div class="evaluation-brand">
+      <div class="brand-seal">IEC</div>
+      <h2 id="evaluationCenterName">مركز الابتكار وريادة الأعمال</h2>
+      <p id="evaluationUniversityName">جامعة الملك عبدالعزيز</p>
+    </div>
+    <div class="evaluation-body">
+      <section class="evaluation-step active" id="evaluationIntro">
+        <p class="eyebrow">تقييم البرنامج</p>
+        <div class="evaluation-program-card">
+          <h3 id="evaluationProgramName"></h3>
+          <div class="evaluation-meta">
+            <div><small>التاريخ</small><strong id="evaluationProgramDate"></strong></div>
+            <div><small>المدرب أو مقدم الجلسة</small><strong id="evaluationProgramTrainer"></strong></div>
+            <div><small>نوع النشاط</small><strong id="evaluationProgramType"></strong></div>
+            <div><small>الفئة المستهدفة</small><strong id="evaluationProgramAudience"></strong></div>
+            <div><small>الجهة المنظمة</small><strong id="evaluationProgramOrganizer"></strong></div>
+            <div><small>مدة التقييم</small><strong>أقل من دقيقة</strong></div>
+          </div>
+        </div>
+        <p class="evaluation-note">نقدّر مشاركتك، ويساعدنا تقييمك على تطوير البرامج وتحسين تجربة المستفيدين.</p>
+        <strong>هل حضرت البرنامج؟</strong>
+        <div class="attendance-box"><button type="button" id="attendanceYes">نعم، حضرت</button><button type="button" id="attendanceNo">لا</button></div>
+        <p class="muted" id="attendanceMessage"></p>
+        <button class="primary-btn wide" type="button" id="startEvaluation">ابدأ التقييم</button>
+      </section>
+
+      <section class="evaluation-step" id="evaluationFormStep">
+        <p class="eyebrow">تقييم تجربتك</p>
+        <div class="evaluation-progress"><span id="evaluationProgressBar"></span></div>
+        <form id="evaluationForm"><input type="hidden" name="programId" />
+          <div class="evaluation-preview" id="ratingQuestions"></div>
+          <label>أبرز نقاط القوة<textarea name="strengths" placeholder="ما الذي أعجبك؟"></textarea></label>
+          <label>ملاحظات أو مقترحات<textarea name="comment" placeholder="اكتب ملاحظتك هنا..."></textarea></label>
+          <button class="primary-btn wide" type="submit">إرسال التقييم</button>
+        </form>
+      </section>
+
+      <section class="evaluation-step evaluation-success" id="evaluationSuccess">
+        <div class="success-icon">✓</div>
+        <h2>شكرًا لك</h2>
+        <p>تم استلام تقييمك بنجاح، ومشاركتك تساعدنا على تطوير جودة البرامج.</p>
+        <span class="evaluation-reference" id="evaluationReference"></span>
+        <button class="primary-btn wide" type="button" id="closeEvaluationSuccess">إغلاق</button>
+      </section>
+
+      <section class="evaluation-step evaluation-error" id="evaluationUnavailable">
+        <h2>التقييم غير متاح</h2>
+        <p class="muted">لم نتمكن من العثور على البرنامج المرتبط بهذا الرابط.</p>
+      </section>
+    </div>
+  </div>
+</div>
 <div class="confirm-modal" id="confirmModal"><div class="modal-card small-modal"><h3>تأكيد الحذف</h3><p>هل تريد حذف البرنامج وجميع تقييماته؟</p><div class="form-actions"><button class="secondary-btn" id="cancelDelete">إلغاء</button><button class="danger-btn" id="confirmDelete">حذف</button></div></div></div>
 <div class="toast" id="toast"></div>
 <script src="app.js"></script>
+<script src="evaluation-v2.js"></script>
 </body>
 </html>
