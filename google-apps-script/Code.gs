@@ -1,5 +1,5 @@
 const SPREADSHEET_ID = '1tQL7hawesc00YbM2ig0rbiinmnhjr3VYOQ3-55Z0DKI';
-const API_VERSION = '2.4.0';
+const API_VERSION = '2.4.1';
 
 const TABLES = {
   Programs: {
@@ -16,11 +16,6 @@ const TABLES = {
     title: 'الحضور',
     keys: ['id','programId','name','email','phone','createdAt'],
     headers: ['المعرّف','معرّف البرنامج','اسم المشارك','البريد الإلكتروني','رقم الجوال','تاريخ التسجيل']
-  },
-  Users: {
-    title: 'المستخدمون',
-    keys: ['email','name','role','active','createdAt','updatedAt'],
-    headers: ['البريد الإلكتروني','الاسم','الصلاحية','نشط','تاريخ الإنشاء','آخر تحديث']
   },
   ActivityLog: {
     title: 'سجل النشاط',
@@ -89,6 +84,8 @@ function route_(request) {
 
 function setupDatabase_() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  removeLegacyUsersSheets_(ss);
+
   Object.keys(TABLES).forEach(name => {
     const config = TABLES[name];
     let sheet = ss.getSheetByName(config.title);
@@ -100,9 +97,17 @@ function setupDatabase_() {
     sheet.getRange(1, 1, 1, config.headers.length).setValues([config.headers]);
     sheet.getRange(1, 1, 1, config.headers.length).setFontWeight('bold').setHorizontalAlignment('right');
   });
+
   const settings = settingsObject_();
   if (!settings.centerName) saveSettings_({ centerName: 'مركز الابتكار وريادة الأعمال' });
   if (!settings.universityName) saveSettings_({ universityName: 'جامعة الملك عبدالعزيز' });
+}
+
+function removeLegacyUsersSheets_(ss) {
+  ['المستخدمون', 'Users'].forEach(name => {
+    const sheet = ss.getSheetByName(name);
+    if (sheet && ss.getSheets().length > 1) ss.deleteSheet(sheet);
+  });
 }
 
 function health_() {
