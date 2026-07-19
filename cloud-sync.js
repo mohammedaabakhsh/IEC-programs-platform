@@ -10,23 +10,19 @@
 
   const API_URL='https://script.google.com/macros/s/AKfycbzaruDNufAdhYJVZvuAGVMQzTvFGMfR2JSMNRZcuzPJRqqXbpeSB_xnieoRvpPKBqv4Pw/exec';
   const LOCAL_KEY=typeof DB_KEY==='string'?DB_KEY:'iec-platform-v2';
-  let ready=false;
-  let syncing=false;
-  let pending=false;
-  let snapshot={programs:[],evaluations:[],settings:{}};
+  let ready=false,syncing=false,pending=false;
+  let snapshot={programs:[],evaluations:[],attendance:[],settings:{}};
   const originalSave=typeof save==='function'?save:null;
 
   function status(text,ok=true){
-    const el=document.querySelector('.sidebar-card small');
-    const dot=document.querySelector('.sidebar-card .status-dot');
+    const el=document.querySelector('.sidebar-card small'),dot=document.querySelector('.sidebar-card .status-dot');
     if(el)el.textContent=text;
     if(dot){dot.style.background=ok?'#22c55e':'#ef4444';dot.style.boxShadow=ok?'0 0 0 4px rgba(34,197,94,.15)':'0 0 0 4px rgba(239,68,68,.15)'}
     window.dispatchEvent(new CustomEvent('iec-cloud-status',{detail:{text,ok}}));
   }
 
   async function request(action,data={}){
-    const controller=new AbortController();
-    const timeout=setTimeout(()=>controller.abort(),20000);
+    const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),20000);
     try{
       const response=await fetch(API_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action,data}),signal:controller.signal,cache:'no-store'});
       if(!response.ok)throw new Error(`HTTP ${response.status}`);
@@ -39,63 +35,63 @@
   const plain=value=>JSON.parse(JSON.stringify(value||null));
   const mapById=list=>new Map((list||[]).map(item=>[String(item.id),item]));
   const changed=(a,b)=>JSON.stringify(a)!==JSON.stringify(b);
+  const snapshotNow=()=>plain({programs:db.programs||[],evaluations:db.evaluations||[],attendance:db.attendance||[],settings:db.settings||{}});
 
   function renderAll(){
     try{
-      renderDashboard?.();renderPrograms?.();renderEvaluations?.();renderReports?.();
+      renderDashboard?.();renderPrograms?.();renderEvaluations?.();renderReports?.();window.renderTrash?.();
       const center=document.querySelector('#centerName');if(center)center.value=db.settings?.centerName||'';
       const university=document.querySelector('#universityName');if(university)university.value=db.settings?.universityName||'';
     }catch(error){console.warn('Cloud render warning',error)}
   }
 
-  async function loadCloud(){
-    status('جارٍ الاتصال بقاعدة البيانات…');
-    return request('bootstrap');
+  function makeTrash(cloud){
+    return (cloud.deletedPrograms||[]).map(program=>({
+      program,
+      evaluations:(cloud.evaluations||[]).filter(e=>String(e.programId)===String(program.id)),
+      attendance:(cloud.attendance||[]).filter(a=>String(a.programId)===String(program.id)),
+      deletedAt:program.deletedAt
+    }));
   }
 
   function applyCloud(cloud){
-    const localExtras={questionBank:db.questionBank,users:db.users,notifications:db.notifications,annualGoals:db.annualGoals,archives:db.archives,trash:db.trash};
-    db={...db,...localExtras,programs:cloud.programs||[],evaluations:cloud.evaluations||[],attendance:cloud.attendance||[],settings:{...(db.settings||{}),...(cloud.settings||{})},goals:cloud.goals||[],activityLog:cloud.activityLog||[]};
+    const localExtras={questionBank:db.questionBank,users:db.users,notifications:db.notifications,annualGoals:db.annualGoals,archives:db.archives};
+    db={...db,...localExtras,programs:cloud.programs||[],evaluations:cloud.evaluations||[],attendance:cloud.attendance||[],trash:makeTrash(cloud),settings:{...(db.settings||{}),...(cloud.settings||{})},goals:cloud.goals||[],activityLog:cloud.activityLog||[]};
     localStorage.setItem(LOCAL_KEY,JSON.stringify(db));
-    snapshot=plain({programs:db.programs,evaluations:db.evaluations,settings:db.settings});
-    renderAll();
+    snapshot=snapshotNow();renderAll();
+  }
+
+  async function syncCollection(actionSave,actionDelete,oldList,newList){
+    const oldMap=mapById(oldList),newMap=mapById(newList);
+    for(const [id,item] of newMap){if(!oldMap.has(id)||changed(item,oldMap.get(id)))await request(actionSave,item)}
+    if(actionDelete)for(const [id] of oldMap){if(!newMap.has(id))await request(actionDelete,{id})}
   }
 
   async function syncChanges(){
-    if(!ready){pending=true;return}
-    if(syncing){pending=true;return}
+    if(!ready||syncing){pending=true;return}
     if(!navigator.onLine){pending=true;status('بانتظار عودة الإنترنت — محفوظ محليًا',false);return}
     syncing=true;pending=false;status('جارٍ حفظ التغييرات…');
     try{
-      const oldPrograms=mapById(snapshot.programs),newPrograms=mapById(db.programs);
-      for(const [id,item] of newPrograms){if(!oldPrograms.has(id)||changed(item,oldPrograms.get(id)))await request('programs.save',item)}
-      for(const [id] of oldPrograms){if(!newPrograms.has(id))await request('programs.delete',{id})}
-      const oldEvaluations=mapById(snapshot.evaluations);
-      for(const item of db.evaluations||[]){if(!oldEvaluations.has(String(item.id)))await request('evaluations.save',item)}
+      await syncCollection('programs.save','programs.delete',snapshot.programs,db.programs||[]);
+      await syncCollection('evaluations.save','evaluations.delete',snapshot.evaluations,db.evaluations||[]);
+      await syncCollection('attendance.save','attendance.delete',snapshot.attendance,db.attendance||[]);
       if(changed(db.settings||{},snapshot.settings||{}))await request('settings.save',db.settings||{});
-      snapshot=plain({programs:db.programs,evaluations:db.evaluations,settings:db.settings});
-      localStorage.setItem(LOCAL_KEY,JSON.stringify(db));
-      status('متصل بقاعدة البيانات');
+      snapshot=snapshotNow();localStorage.setItem(LOCAL_KEY,JSON.stringify(db));status('متصل بقاعدة البيانات');
     }catch(error){
-      pending=true;
-      console.error('Cloud sync failed',error);
-      status('تعذر الحفظ السحابي — سيُعاد تلقائيًا',false);
+      pending=true;console.error('Cloud sync failed',error);status('تعذر الحفظ السحابي — سيُعاد تلقائيًا',false);
       showToast?.('تعذر الاتصال مؤقتًا؛ التغييرات محفوظة على هذا الجهاز وستُرسل عند عودة الاتصال');
-    }finally{
-      syncing=false;
-      if(pending&&navigator.onLine)setTimeout(syncChanges,1200);
-    }
+    }finally{syncing=false;if(pending&&navigator.onLine)setTimeout(syncChanges,1200)}
   }
 
-  save=function(){
-    try{originalSave?.()}catch(_){localStorage.setItem(LOCAL_KEY,JSON.stringify(db))}
-    pending=true;syncChanges();
-  };
+  save=function(){try{originalSave?.()}catch(_){localStorage.setItem(LOCAL_KEY,JSON.stringify(db))}pending=true;syncChanges()};
 
   window.IECCloud={
     apiUrl:API_URL,
+    request,
     refresh:async()=>{const cloud=await request('bootstrap');applyCloud(cloud);status('متصل بقاعدة البيانات')},
     sync:syncChanges,
+    restoreProgram:async id=>{await request('programs.restore',{id});await window.IECCloud.refresh()},
+    deleteProgramPermanent:async id=>{await request('programs.deletePermanent',{id});await window.IECCloud.refresh()},
     getState:()=>({ready,syncing,pending,online:navigator.onLine})
   };
 
@@ -104,15 +100,7 @@
   window.addEventListener('beforeunload',e=>{if(syncing||pending){e.preventDefault();e.returnValue=''}});
 
   (async()=>{
-    try{
-      const cloud=await loadCloud();
-      applyCloud(cloud);
-      ready=true;
-      status('متصل بقاعدة البيانات');
-    }catch(error){
-      console.error('Cloud initialization failed',error);
-      ready=true;
-      status('يعمل محليًا — تعذر الاتصال بقاعدة البيانات',false);
-    }
+    try{status('جارٍ الاتصال بقاعدة البيانات…');const cloud=await request('bootstrap');applyCloud(cloud);ready=true;status('متصل بقاعدة البيانات')}
+    catch(error){console.error('Cloud initialization failed',error);ready=true;status('يعمل محليًا — تعذر الاتصال بقاعدة البيانات',false)}
   })();
 })();
