@@ -1,6 +1,6 @@
 const SPREADSHEET_ID = '1tQL7hawesc00YbM2ig0rbiinmnhjr3VYOQ3-55Z0DKI';
 const MASTER_EVALUATION_FORM_ID = '1M9hTHW6AMfBLDEh_x2G2EVD373lXLzl9S1h9MlOeiaI';
-const API_VERSION = '2.5.0';
+const API_VERSION = '2.5.1';
 
 const TABLES = {
   Programs: {
@@ -94,6 +94,7 @@ function setupDatabase_() {
     const oldSheet = ss.getSheetByName(name);
     if (!sheet && oldSheet) { oldSheet.setName(config.title); sheet = oldSheet; }
     if (!sheet) sheet = ss.insertSheet(config.title);
+    migrateSheet_(name, sheet);
     sheet.setRightToLeft(true);
     sheet.setFrozenRows(1);
     sheet.getRange(1, 1, 1, config.headers.length).setValues([config.headers]);
@@ -102,6 +103,16 @@ function setupDatabase_() {
   const settings = settingsObject_();
   if (!settings.centerName) saveSettings_({ centerName: 'مركز الابتكار وريادة الأعمال' });
   if (!settings.universityName) saveSettings_({ universityName: 'جامعة الملك عبدالعزيز' });
+}
+
+function migrateSheet_(tableName, sheet) {
+  if (tableName !== 'Programs' || sheet.getLastColumn() < 1) return;
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getDisplayValues()[0];
+  const evaluationHeader = TABLES.Programs.headers[9];
+  if (headers.indexOf(evaluationHeader) === -1 && headers.indexOf('تاريخ الإنشاء') >= 0) {
+    sheet.insertColumnBefore(10);
+    sheet.getRange(1, 10).setValue(evaluationHeader);
+  }
 }
 
 function removeLegacyUsersSheets_(ss) {
@@ -146,7 +157,7 @@ function saveProgram_(data) {
     evaluationUrl: '',
     createdAt: existing ? existing.record.createdAt : now,
     updatedAt: now,
-    deletedAt: ''
+    deletedAt: existing ? String(existing.record.deletedAt || '') : ''
   };
   try { entity.evaluationUrl = buildEvaluationUrl_(entity); }
   catch (error) { entity.evaluationUrl = String((existing && existing.record.evaluationUrl) || data.evaluationUrl || ''); }
@@ -265,6 +276,7 @@ function saveGoals_(data) {
 function setupEvaluationForm_() {
   const form = FormApp.openById(MASTER_EVALUATION_FORM_ID);
   const programItems = ensureProgramItems_(form);
+  if (form.getDestinationId() !== SPREADSHEET_ID) form.setDestination(FormApp.DestinationType.SPREADSHEET, SPREADSHEET_ID);
   ScriptApp.getProjectTriggers().filter(trigger => trigger.getHandlerFunction() === 'onGoogleFormSubmit_').forEach(trigger => ScriptApp.deleteTrigger(trigger));
   ScriptApp.newTrigger('onGoogleFormSubmit_').forForm(form).onFormSubmit().create();
   saveSettings_({ evaluationFormId: MASTER_EVALUATION_FORM_ID, evaluationFormUrl: form.getPublishedUrl(), evaluationFormSetupAt: new Date().toISOString() });
@@ -275,7 +287,7 @@ function evaluationFormStatus_() {
   try {
     const form = FormApp.openById(MASTER_EVALUATION_FORM_ID);
     const triggers = ScriptApp.getProjectTriggers().filter(trigger => trigger.getHandlerFunction() === 'onGoogleFormSubmit_');
-    return { ready: triggers.length > 0, title: form.getTitle(), publishedUrl: form.getPublishedUrl(), triggerCount: triggers.length };
+    return { ready: triggers.length === 1, title: form.getTitle(), publishedUrl: form.getPublishedUrl(), destinationId: form.getDestinationId(), triggerCount: triggers.length };
   } catch (error) {
     return { ready: false, error: error.message };
   }
@@ -330,10 +342,14 @@ function onGoogleFormSubmit_(e) {
     benefit: ['الاستفادة المتوقعة','الاستفادة','الفائدة']
   };
   const values = {};
-  Object.keys(scoreAliases).forEach(key => values[key] = Number(answerFor(scoreAliases[key])) || 0);
-  const numericAnswers = responses.map(response => Number(response.answer)).filter(value => Number.isFinite(value) && value >= 1 && value <= 5);
+  Object.keys(scoreAliases).forEach(key => values[key] = parseRating_(answerFor(scoreAliases[key])));
+  const numericAnswers = responses.map(response => parseRating_(response.answer)).filter(value => value >= 1 && value <= 5);
   let fallbackIndex = 0;
-  Object.keys(scoreAliases).forEach(key => { if (!values[key]) values[key] = numericAnswers[fallbackIndex++]; });
+  Object.keys(scoreAliases).forEach(key => {
+    if (!values[key]) values[key] = numericAnswers[fallbackIndex] || 0;
+    fallbackIndex += 1;
+  });
+  Object.keys(values).forEach(key => { if (!values[key]) throw new Error('لم يتم العثور على إجابة صحيحة لمحور: ' + key); });
 
   const timestamp = e.response.getTimestamp ? e.response.getTimestamp() : new Date();
   const responseId = e.response.getId ? e.response.getId() : Utilities.getUuid();
@@ -349,6 +365,13 @@ function onGoogleFormSubmit_(e) {
     comment: answerFor(['الملاحظات والمقترحات','الملاحظات','المقترحات','اقتراحاتك']),
     createdAt: timestamp instanceof Date ? timestamp.toISOString() : String(timestamp)
   });
+}
+
+function parseRating_(value) {
+  const direct = Number(value);
+  if (Number.isFinite(direct) && direct >= 1 && direct <= 5) return direct;
+  const match = String(value || '').match(/[1-5]/);
+  return match ? Number(match[0]) : 0;
 }
 
 function normalizeTitle_(value) {
