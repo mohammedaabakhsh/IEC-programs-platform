@@ -1,5 +1,5 @@
-const SPREADSHEET_ID = '1QvIVD7v2QRF_SajPz4RiYNdpt2OEOT0C9HHKkzV4hPc';
-const API_VERSION = '2.0.0';
+const SPREADSHEET_ID = '1tQL7hawesc00YbM2ig0rbiinmnhjr3VYOQ3-55Z0DKI';
+const API_VERSION = '2.0.1';
 
 const SCHEMA = {
   Programs: ['id','name','type','date','audience','participants','organizer','trainer','description','createdAt','updatedAt','deletedAt'],
@@ -36,32 +36,24 @@ function doPost(e) {
 function route_(request) {
   const action = String(request.action || '').trim();
   const data = request.data || {};
-
   switch (action) {
     case 'health': return health_();
     case 'bootstrap': return bootstrap_();
     case 'setup': setupDatabase_(); return health_();
-
     case 'programs.list': return listRows_('Programs', false);
     case 'programs.save': return saveProgram_(data);
     case 'programs.delete': return softDeleteProgram_(data.id);
     case 'programs.restore': return restoreProgram_(data.id);
-
     case 'evaluations.list': return filterByProgram_('Evaluations', data.programId);
     case 'evaluations.save': return appendEntity_('Evaluations', normalizeEvaluation_(data));
-
     case 'attendance.list': return filterByProgram_('Attendance', data.programId);
     case 'attendance.save': return saveAttendance_(data);
-
     case 'settings.get': return settingsObject_();
     case 'settings.save': return saveSettings_(data);
-
     case 'goals.list': return listRows_('KPI_Goals', true);
     case 'goals.save': return saveGoals_(data);
-
     case 'activity.list': return listRows_('ActivityLog', true);
     case 'activity.add': return logActivity_(data.action, data.details, data.actor);
-
     default: throw new Error('إجراء API غير معروف: ' + action);
   }
 }
@@ -84,7 +76,6 @@ function setupDatabase_() {
       });
     }
   });
-
   const settings = settingsObject_();
   if (!settings.centerName) saveSettings_({ centerName: 'مركز الابتكار وريادة الأعمال' });
   if (!settings.universityName) saveSettings_({ universityName: 'جامعة الملك عبدالعزيز' });
@@ -92,13 +83,7 @@ function setupDatabase_() {
 
 function health_() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  return {
-    status: 'ready',
-    spreadsheetId: SPREADSHEET_ID,
-    spreadsheetName: ss.getName(),
-    sheets: Object.keys(SCHEMA),
-    timestamp: new Date().toISOString()
-  };
+  return {status:'ready',spreadsheetId:SPREADSHEET_ID,spreadsheetName:ss.getName(),sheets:Object.keys(SCHEMA),timestamp:new Date().toISOString()};
 }
 
 function bootstrap_() {
@@ -131,7 +116,6 @@ function saveProgram_(data) {
     updatedAt: now,
     deletedAt: ''
   };
-
   if (existing) updateRow_('Programs', existing.row, entity);
   else appendEntity_('Programs', entity);
   logActivity_(existing ? 'تحديث برنامج' : 'إنشاء برنامج', entity.name, data.actor);
@@ -178,10 +162,7 @@ function normalizeEvaluation_(data) {
 function saveAttendance_(data) {
   if (!data.programId) throw new Error('معرف البرنامج مطلوب');
   if (!String(data.name || '').trim()) throw new Error('اسم المشارك مطلوب');
-  const existing = listRows_('Attendance', true).find(row =>
-    row.programId === String(data.programId) &&
-    String(row.name || '').trim().toLowerCase() === String(data.name).trim().toLowerCase()
-  );
+  const existing = listRows_('Attendance', true).find(row => row.programId === String(data.programId) && String(row.name || '').trim().toLowerCase() === String(data.name).trim().toLowerCase());
   if (existing) throw new Error('المشارك مسجل مسبقًا');
   return appendEntity_('Attendance', {
     id: String(data.id || Utilities.getUuid()),
@@ -194,7 +175,6 @@ function saveAttendance_(data) {
 }
 
 function saveSettings_(data) {
-  const sheet = sheet_('Settings');
   const now = new Date().toISOString();
   Object.keys(data || {}).forEach(key => {
     if (key === 'action') return;
@@ -218,14 +198,7 @@ function settingsObject_() {
 
 function saveGoals_(data) {
   const year = String(data.year || new Date().getFullYear());
-  const entity = {
-    year,
-    programs: Number(data.programs || 0),
-    participants: Number(data.participants || 0),
-    satisfaction: Number(data.satisfaction || 0),
-    response: Number(data.response || 0),
-    updatedAt: new Date().toISOString()
-  };
+  const entity = {year,programs:Number(data.programs||0),participants:Number(data.participants||0),satisfaction:Number(data.satisfaction||0),response:Number(data.response||0),updatedAt:new Date().toISOString()};
   const found = findRowByKey_('KPI_Goals', 'year', year);
   if (found) updateRow_('KPI_Goals', found.row, entity);
   else appendEntity_('KPI_Goals', entity);
@@ -233,13 +206,7 @@ function saveGoals_(data) {
 }
 
 function logActivity_(action, details, actor) {
-  return appendEntity_('ActivityLog', {
-    id: Utilities.getUuid(),
-    action: String(action || ''),
-    details: String(details || ''),
-    actor: String(actor || Session.getActiveUser().getEmail() || 'system'),
-    createdAt: new Date().toISOString()
-  });
+  return appendEntity_('ActivityLog', {id:Utilities.getUuid(),action:String(action||''),details:String(details||''),actor:String(actor||Session.getActiveUser().getEmail()||'system'),createdAt:new Date().toISOString()});
 }
 
 function listRows_(sheetName, includeDeleted) {
@@ -273,9 +240,7 @@ function findRowByKey_(sheetName, key, value) {
   if (keyIndex < 0 || sheet.getLastRow() < 2) return null;
   const values = sheet.getRange(2, 1, sheet.getLastRow() - 1, headers.length).getValues();
   for (let i = 0; i < values.length; i++) {
-    if (String(values[i][keyIndex]) === String(value)) {
-      return { row: i + 2, record: rowToObject_(headers, values[i]) };
-    }
+    if (String(values[i][keyIndex]) === String(value)) return { row: i + 2, record: rowToObject_(headers, values[i]) };
   }
   return null;
 }
