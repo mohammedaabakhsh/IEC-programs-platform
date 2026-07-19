@@ -1,4 +1,15 @@
 (()=>{
+  const sidebarStyle=document.createElement('style');
+  sidebarStyle.textContent=`
+    .sidebar{overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;scrollbar-gutter:stable;padding-bottom:24px}
+    .brand{flex:0 0 auto}
+    .nav-list{flex:0 0 auto}
+    .sidebar-card{flex:0 0 auto;margin-top:28px}
+    @media(min-width:821px){.sidebar{max-height:100dvh}}
+    @media(max-width:820px){.sidebar{height:100dvh;max-height:100dvh;padding-bottom:max(24px,env(safe-area-inset-bottom))}}
+  `;
+  document.head.appendChild(sidebarStyle);
+
   const API_URL='https://script.google.com/macros/s/AKfycbzaruDNufAdhYJVZvuAGVMQzTvFGMfR2JSMNRZcuzPJRqqXbpeSB_xnieoRvpPKBqv4Pw/exec';
   const LOCAL_KEY=typeof DB_KEY==='string'?DB_KEY:'iec-platform-v2';
   let ready=false;
