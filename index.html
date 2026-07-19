@@ -5,144 +5,98 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#356b3d" />
   <title>منصة برامج مركز الابتكار وريادة الأعمال</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <div class="app-shell">
-    <aside class="sidebar" id="sidebar">
-      <div class="brand">
-        <div class="brand-mark">IEC</div>
-        <div>
-          <strong>مركز الابتكار</strong>
-          <span>وريادة الأعمال</span>
-        </div>
+<div class="app-shell">
+  <aside class="sidebar" id="sidebar">
+    <div class="brand"><div class="brand-mark">IEC</div><div><strong>مركز الابتكار</strong><span>وريادة الأعمال</span></div></div>
+    <nav class="nav-list">
+      <button class="nav-item active" data-view="dashboard"><span>⌂</span> لوحة المتابعة</button>
+      <button class="nav-item" data-view="programs"><span>▦</span> البرامج والورش</button>
+      <button class="nav-item" data-view="new-program"><span>＋</span> إضافة برنامج</button>
+      <button class="nav-item" data-view="evaluations"><span>★</span> التقييمات</button>
+      <button class="nav-item" data-view="reports"><span>▤</span> التقارير</button>
+      <button class="nav-item" data-view="settings"><span>⚙</span> الإعدادات</button>
+    </nav>
+    <div class="sidebar-card"><span class="status-dot"></span><div><strong>حالة النظام</strong><small>يعمل محليًا — الربط لاحقًا</small></div></div>
+  </aside>
+
+  <main class="main-content">
+    <header class="topbar">
+      <button class="menu-btn" id="menuBtn">☰</button>
+      <div><p class="eyebrow">منصة قياس رضا المستفيدين</p><h1 id="pageTitle">لوحة المتابعة</h1></div>
+      <div class="topbar-actions"><button class="icon-btn">●</button><div class="user-chip"><span>م ب</span><div><strong>مدير النظام</strong><small>إدارة المركز</small></div></div></div>
+    </header>
+
+    <section id="dashboard" class="view active-view">
+      <div class="hero-card"><div><span class="hero-badge">نظرة عامة</span><h2>إدارة البرامج وقياس رضا المستفيدين من مكان واحد</h2><p>سجّل البرامج، شارك رابط التقييم، وتابع المؤشرات والتقارير.</p></div><button class="primary-btn" data-go="new-program">＋ إضافة برنامج جديد</button></div>
+      <div class="kpi-grid">
+        <article class="kpi-card"><span class="kpi-icon">▦</span><div><small>إجمالي البرامج</small><strong id="programCount">0</strong><em>جميع الأنشطة</em></div></article>
+        <article class="kpi-card"><span class="kpi-icon">👥</span><div><small>إجمالي المشاركين</small><strong id="participantCount">0</strong><em>المسجلون</em></div></article>
+        <article class="kpi-card"><span class="kpi-icon">★</span><div><small>متوسط الرضا</small><strong id="satisfactionAvg">—</strong><em>من 5</em></div></article>
+        <article class="kpi-card"><span class="kpi-icon">↗</span><div><small>نسبة الاستجابة</small><strong id="responseAvg">0%</strong><em>إجمالي الردود</em></div></article>
       </div>
-
-      <nav class="nav-list" aria-label="التنقل الرئيسي">
-        <button class="nav-item active" data-view="dashboard"><span>⌂</span> لوحة المتابعة</button>
-        <button class="nav-item" data-view="programs"><span>▦</span> البرامج والورش</button>
-        <button class="nav-item" data-view="new-program"><span>＋</span> إضافة برنامج</button>
-        <button class="nav-item" data-view="evaluations"><span>★</span> التقييمات</button>
-        <button class="nav-item" data-view="reports"><span>▤</span> التقارير</button>
-        <button class="nav-item" data-view="settings"><span>⚙</span> الإعدادات</button>
-      </nav>
-
-      <div class="sidebar-card">
-        <span class="status-dot"></span>
-        <div><strong>حالة الربط</strong><small>نسخة تجريبية محلية</small></div>
+      <div class="dashboard-grid">
+        <article class="panel chart-panel"><div class="panel-head"><div><small>الأداء</small><h3>متوسط الرضا حسب البرنامج</h3></div></div><div class="bar-chart" id="satisfactionChart"></div></article>
+        <article class="panel response-panel"><div class="panel-head"><div><small>التفاعل</small><h3>المشاركة في التقييم</h3></div></div><div class="donut" id="responseDonut"><span id="donutValue">0%</span></div><div class="legend" id="responseLegend"></div></article>
       </div>
-    </aside>
+      <article class="panel table-panel"><div class="panel-head"><div><small>آخر الأنشطة</small><h3>أحدث البرامج</h3></div><button class="text-btn" data-go="programs">عرض الكل ←</button></div><div class="table-wrap"><table><thead><tr><th>البرنامج</th><th>النوع</th><th>التاريخ</th><th>المشاركون</th><th>الاستجابة</th><th>الرضا</th><th>الحالة</th></tr></thead><tbody id="recentPrograms"></tbody></table></div></article>
+    </section>
 
-    <main class="main-content">
-      <header class="topbar">
-        <button class="menu-btn" id="menuBtn" aria-label="فتح القائمة">☰</button>
-        <div>
-          <p class="eyebrow">منصة قياس رضا المستفيدين</p>
-          <h1 id="pageTitle">لوحة المتابعة</h1>
+    <section id="programs" class="view">
+      <div class="section-tools"><div><p class="eyebrow">قاعدة بيانات البرامج</p><h2>البرامج وورش العمل والجلسات</h2></div><button class="primary-btn" data-go="new-program">＋ إضافة برنامج</button></div>
+      <div class="panel filters"><input id="programSearch" type="search" placeholder="ابحث باسم البرنامج أو المدرب..." /><select id="typeFilter"><option value="all">جميع الأنواع</option><option>برنامج</option><option>ورشة عمل</option><option>جلسة</option></select><select id="statusFilter"><option value="all">جميع الحالات</option><option>مكتمل</option><option>قادم</option></select></div>
+      <div class="program-grid" id="programGrid"></div>
+    </section>
+
+    <section id="new-program" class="view">
+      <div class="section-tools"><div><p class="eyebrow">إضافة وتوثيق</p><h2 id="programFormTitle">إنشاء برنامج جديد</h2></div></div>
+      <form class="panel form-panel" id="programForm"><input type="hidden" name="id" />
+        <div class="form-intro"><span>1</span><div><h3>بيانات البرنامج الأساسية</h3><p>بعد الحفظ سيُنشأ رابط تقييم مستقل للبرنامج.</p></div></div>
+        <div class="form-grid">
+          <label>اسم البرنامج<input name="name" required /></label>
+          <label>نوع النشاط<select name="type" required><option value="">اختر النوع</option><option>برنامج</option><option>ورشة عمل</option><option>جلسة</option></select></label>
+          <label>تاريخ البرنامج<input name="date" type="date" required /></label>
+          <label>الفئة المستهدفة<input name="audience" required /></label>
+          <label>عدد المشاركين<input name="participants" type="number" min="1" required /></label>
+          <label>الجهة المنظمة<input name="organizer" required /></label>
+          <label class="full-width">اسم المدرب أو مقدم الجلسة<input name="trainer" required /></label>
+          <label class="full-width">وصف مختصر<textarea name="description" rows="3"></textarea></label>
         </div>
-        <div class="topbar-actions">
-          <button class="icon-btn" title="الإشعارات">●</button>
-          <div class="user-chip"><span>م ب</span><div><strong>مدير النظام</strong><small>إدارة المركز</small></div></div>
-        </div>
-      </header>
+        <div class="form-actions"><button type="reset" class="secondary-btn" id="cancelEdit">إلغاء</button><button type="submit" class="primary-btn">حفظ البرنامج</button></div>
+      </form>
+    </section>
 
-      <section id="dashboard" class="view active-view">
-        <div class="hero-card">
-          <div>
-            <span class="hero-badge">نظرة عامة</span>
-            <h2>متابعة أداء البرامج ورضا المستفيدين من مكان واحد</h2>
-            <p>سجّل البرامج، شارك رابط التقييم، وتابع المؤشرات والتقارير بشكل مباشر.</p>
-          </div>
-          <button class="primary-btn" data-go="new-program">＋ إضافة برنامج جديد</button>
-        </div>
+    <section id="program-details" class="view"><div id="programDetails"></div></section>
 
-        <div class="kpi-grid">
-          <article class="kpi-card"><span class="kpi-icon">▦</span><div><small>إجمالي البرامج</small><strong id="programCount">12</strong><em>منذ بداية العام</em></div></article>
-          <article class="kpi-card"><span class="kpi-icon">👥</span><div><small>إجمالي المشاركين</small><strong>486</strong><em>في جميع البرامج</em></div></article>
-          <article class="kpi-card"><span class="kpi-icon">★</span><div><small>متوسط الرضا</small><strong>4.62</strong><em>من 5</em></div></article>
-          <article class="kpi-card"><span class="kpi-icon">↗</span><div><small>نسبة الاستجابة</small><strong>78%</strong><em>+6% عن الفترة السابقة</em></div></article>
-        </div>
+    <section id="evaluations" class="view">
+      <div class="section-tools"><div><p class="eyebrow">نموذج موحّد</p><h2>إدارة التقييمات</h2></div><button class="primary-btn" id="previewEvaluation">معاينة النموذج</button></div>
+      <div class="panel table-panel"><div class="table-wrap"><table><thead><tr><th>البرنامج</th><th>عدد الردود</th><th>الاستجابة</th><th>متوسط الرضا</th><th>الإجراء</th></tr></thead><tbody id="evaluationPrograms"></tbody></table></div></div>
+    </section>
 
-        <div class="dashboard-grid">
-          <article class="panel chart-panel">
-            <div class="panel-head"><div><small>مؤشر الأداء</small><h3>متوسط الرضا الشهري</h3></div><select><option>آخر 6 أشهر</option></select></div>
-            <div class="bar-chart" aria-label="رسم متوسط الرضا الشهري">
-              <div><span style="height:58%"></span><small>فبراير</small></div>
-              <div><span style="height:66%"></span><small>مارس</small></div>
-              <div><span style="height:72%"></span><small>أبريل</small></div>
-              <div><span style="height:78%"></span><small>مايو</small></div>
-              <div><span style="height:84%"></span><small>يونيو</small></div>
-              <div><span style="height:92%"></span><small>يوليو</small></div>
-            </div>
-          </article>
+    <section id="reports" class="view">
+      <div class="section-tools"><div><p class="eyebrow">مؤشرات وتقارير</p><h2>التقارير الدورية</h2></div><button class="primary-btn" id="exportCsv">تصدير CSV</button></div>
+      <div class="kpi-grid report-kpis" id="reportKpis"></div>
+      <article class="panel table-panel"><div class="panel-head"><div><small>ملخص تفصيلي</small><h3>أداء جميع البرامج</h3></div></div><div class="table-wrap"><table><thead><tr><th>البرنامج</th><th>المحتوى</th><th>التنظيم</th><th>المدرب</th><th>تحقق الأهداف</th><th>الاستفادة</th><th>العام</th></tr></thead><tbody id="reportsTable"></tbody></table></div></article>
+      <article class="panel notes-panel"><div class="panel-head"><div><small>صوت المستفيد</small><h3>أبرز الملاحظات والمقترحات</h3></div></div><div id="commentsList"></div></article>
+    </section>
 
-          <article class="panel response-panel">
-            <div class="panel-head"><div><small>التفاعل</small><h3>نسبة المشاركة بالتقييم</h3></div></div>
-            <div class="donut"><span>78%</span></div>
-            <div class="legend"><span><i class="legend-green"></i> تم التقييم 379</span><span><i></i> لم يقيّم 107</span></div>
-          </article>
-        </div>
-
-        <article class="panel table-panel">
-          <div class="panel-head"><div><small>آخر الأنشطة</small><h3>أحدث البرامج</h3></div><button class="text-btn" data-go="programs">عرض الكل ←</button></div>
-          <div class="table-wrap">
-            <table>
-              <thead><tr><th>البرنامج</th><th>النوع</th><th>التاريخ</th><th>المشاركون</th><th>الاستجابة</th><th>الرضا</th><th>الحالة</th></tr></thead>
-              <tbody id="recentPrograms"></tbody>
-            </table>
-          </div>
-        </article>
-      </section>
-
-      <section id="programs" class="view">
-        <div class="section-tools">
-          <div><p class="eyebrow">قاعدة بيانات البرامج</p><h2>البرامج وورش العمل والجلسات</h2></div>
-          <button class="primary-btn" data-go="new-program">＋ إضافة برنامج</button>
-        </div>
-        <div class="panel filters"><input id="programSearch" type="search" placeholder="ابحث باسم البرنامج أو المدرب..." /><select id="typeFilter"><option value="all">جميع الأنواع</option><option>برنامج</option><option>ورشة عمل</option><option>جلسة</option></select><select><option>جميع الحالات</option><option>مكتمل</option><option>قادم</option></select></div>
-        <div class="program-grid" id="programGrid"></div>
-      </section>
-
-      <section id="new-program" class="view">
-        <div class="section-tools"><div><p class="eyebrow">إضافة وتوثيق</p><h2>إنشاء برنامج جديد</h2></div></div>
-        <form class="panel form-panel" id="programForm">
-          <div class="form-intro"><span>1</span><div><h3>بيانات البرنامج الأساسية</h3><p>أدخل تفاصيل البرنامج ليتم إنشاء صفحة تقييم ورابط خاص به.</p></div></div>
-          <div class="form-grid">
-            <label>اسم البرنامج<input name="name" required placeholder="مثال: مهارات التفكير الابتكاري" /></label>
-            <label>نوع النشاط<select name="type" required><option value="">اختر النوع</option><option>برنامج</option><option>ورشة عمل</option><option>جلسة</option></select></label>
-            <label>تاريخ البرنامج<input name="date" type="date" required /></label>
-            <label>الفئة المستهدفة<input name="audience" placeholder="طلاب، موظفون، رواد أعمال..." /></label>
-            <label>عدد المشاركين<input name="participants" type="number" min="1" placeholder="0" /></label>
-            <label>الجهة المنظمة<input name="organizer" placeholder="اسم الإدارة أو الجهة" /></label>
-            <label class="full-width">اسم المدرب أو مقدم الجلسة<input name="trainer" required placeholder="الاسم الكامل" /></label>
-          </div>
-          <div class="form-actions"><button type="reset" class="secondary-btn">إلغاء</button><button type="submit" class="primary-btn">حفظ وإنشاء رابط التقييم</button></div>
-        </form>
-      </section>
-
-      <section id="evaluations" class="view"><div class="empty-state"><span>★</span><h2>نموذج التقييم الموحد</h2><p>سيظهر لكل برنامج رابط مستقل يستخدم نفس محاور التقييم ويربط الرد بالبرنامج تلقائيًا.</p><button class="primary-btn" id="previewEvaluation">معاينة النموذج</button></div></section>
-      <section id="reports" class="view"><div class="empty-state"><span>▤</span><h2>التقارير الدورية</h2><p>تقارير شهرية وربع سنوية وسنوية مع متوسط الرضا، نسبة الاستجابة، وأبرز فرص التحسين.</p><button class="primary-btn">إنشاء تقرير جديد</button></div></section>
-      <section id="settings" class="view"><div class="empty-state"><span>⚙</span><h2>إعدادات النظام</h2><p>إدارة محاور التقييم، بيانات المركز، وربط Google Sheets في المرحلة التالية.</p><button class="primary-btn">إعداد الربط</button></div></section>
-    </main>
-  </div>
-
-  <div class="modal" id="evaluationModal" aria-hidden="true">
-    <div class="modal-card">
-      <button class="modal-close" id="closeModal">×</button>
-      <p class="eyebrow">نموذج المستفيد</p><h2>تقييم البرنامج</h2><p>نقدّر مشاركتك. يستغرق التقييم أقل من دقيقة.</p>
-      <div class="evaluation-preview">
-        <label>ما مستوى رضاك عن المحتوى؟<div class="rating-row"><button>1</button><button>2</button><button>3</button><button>4</button><button>5</button></div></label>
-        <label>ما مستوى رضاك عن التنظيم؟<div class="rating-row"><button>1</button><button>2</button><button>3</button><button>4</button><button>5</button></div></label>
-        <label>ملاحظات أو مقترحات<textarea placeholder="اكتب ملاحظتك هنا..."></textarea></label>
+    <section id="settings" class="view">
+      <div class="section-tools"><div><p class="eyebrow">إعدادات النظام</p><h2>التخصيص والنسخ الاحتياطي</h2></div></div>
+      <div class="settings-grid">
+        <article class="panel form-panel"><h3>بيانات المركز</h3><div class="form-grid"><label>اسم المركز<input id="centerName" value="مركز الابتكار وريادة الأعمال" /></label><label>الجهة<input id="universityName" value="جامعة الملك عبدالعزيز" /></label></div><div class="form-actions"><button class="primary-btn" id="saveSettings">حفظ الإعدادات</button></div></article>
+        <article class="panel form-panel"><h3>البيانات المحلية</h3><p class="muted">يمكن تنزيل نسخة احتياطية أو إعادة بيانات التجربة.</p><div class="action-stack"><button class="secondary-btn" id="backupData">تنزيل نسخة JSON</button><button class="danger-btn" id="resetData">إعادة بيانات التجربة</button></div></article>
       </div>
-      <button class="primary-btn wide">إرسال التقييم</button>
-    </div>
-  </div>
+    </section>
+  </main>
+</div>
 
-  <div class="toast" id="toast"></div>
-  <script src="app.js"></script>
+<div class="modal" id="evaluationModal"><div class="modal-card"><button class="modal-close" id="closeModal">×</button><p class="eyebrow">نموذج المستفيد</p><h2 id="evaluationTitle">تقييم البرنامج</h2><p>نقدّر مشاركتك. يستغرق التقييم أقل من دقيقة.</p><form id="evaluationForm"><input type="hidden" name="programId" /><div class="evaluation-preview" id="ratingQuestions"></div><label>أبرز نقاط القوة<textarea name="strengths" placeholder="ما الذي أعجبك؟"></textarea></label><label>ملاحظات أو مقترحات<textarea name="comment" placeholder="اكتب ملاحظتك هنا..."></textarea></label><button class="primary-btn wide" type="submit">إرسال التقييم</button></form></div></div>
+<div class="confirm-modal" id="confirmModal"><div class="modal-card small-modal"><h3>تأكيد الحذف</h3><p>هل تريد حذف البرنامج وجميع تقييماته؟</p><div class="form-actions"><button class="secondary-btn" id="cancelDelete">إلغاء</button><button class="danger-btn" id="confirmDelete">حذف</button></div></div></div>
+<div class="toast" id="toast"></div>
+<script src="app.js"></script>
 </body>
 </html>
