@@ -5,6 +5,13 @@
     if(!document.querySelector('script[src="cloud-sync.js"]')){
       const cloud=document.createElement('script');
       cloud.src='cloud-sync.js';
+      cloud.onload=()=>{
+        if(!document.querySelector('script[src="program-metadata-sync.js"]')){
+          const metadata=document.createElement('script');
+          metadata.src='program-metadata-sync.js';
+          document.body.appendChild(metadata);
+        }
+      };
       document.body.appendChild(cloud);
     }
   };
