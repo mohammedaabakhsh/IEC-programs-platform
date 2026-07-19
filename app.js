@@ -46,3 +46,5 @@ $('#saveSettings').onclick=()=>{db.settings.centerName=$('#centerName').value.tr
 function showToast(msg){const t=$('#toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500)}
 window.addEventListener('hashchange',()=>{const m=location.hash.match(/^#evaluate=(.+)$/);if(m)openEvaluation(decodeURIComponent(m[1]))});
 renderDashboard();renderPrograms();renderEvaluations();renderReports();$('#centerName').value=db.settings.centerName;$('#universityName').value=db.settings.universityName;if(location.hash.startsWith('#evaluate='))openEvaluation(decodeURIComponent(location.hash.split('=')[1]));
+if(!document.querySelector('link[href="completion-features.css"]')){const l=document.createElement('link');l.rel='stylesheet';l.href='completion-features.css';document.head.appendChild(l)}
+if(!document.querySelector('script[src="completion-features.js"]')){const s=document.createElement('script');s.src='completion-features.js';document.body.appendChild(s)}
