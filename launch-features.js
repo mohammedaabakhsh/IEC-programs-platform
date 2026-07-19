@@ -1,5 +1,5 @@
 (()=>{
-  const VERSION='1.0.0-rc.1';
+  const VERSION='1.0.0-rc.2';
   const ROLE_KEY='iec-active-role';
   const THEME_KEY='iec-theme';
   const roles={admin:'مدير النظام',supervisor:'مشرف',employee:'موظف',viewer:'قارئ فقط'};
@@ -36,12 +36,12 @@
       <div class="system-grid">
         <article class="panel form-panel"><h3>منصة برامج مركز الابتكار وريادة الأعمال</h3><p class="muted">إدارة البرامج والتقييمات والتقارير من واجهة عربية موحدة.</p><dl class="system-dl"><div><dt>الإصدار</dt><dd>${VERSION}</dd></div><div><dt>التخزين الحالي</dt><dd>محلي على هذا الجهاز</dd></div><div><dt>الربط السحابي</dt><dd>المرحلة التالية: Google Sheets</dd></div><div><dt>الصلاحية الحالية</dt><dd id="currentRoleLabel"></dd></div></dl></article>
         <article class="panel form-panel"><div class="panel-head"><h3>فحص حالة النظام</h3><button class="secondary-btn" id="runHealthCheck">إعادة الفحص</button></div><div id="healthResults" class="health-list"></div></article>
-        <article class="panel form-panel advanced-wide"><h3>سجل الإصدارات</h3><div class="release-list"><div><strong>${VERSION}</strong><p>التقارير المتقدمة، الجدولة، سلة المحذوفات، الصلاحيات المحلية، الوضع الداكن، PWA وصفحة حالة النظام.</p></div><div><strong>0.9.0</strong><p>بنك الأسئلة، تخصيص التقييم، القوالب، التنبيهات وسجل النشاط.</p></div></div></article>
+        <article class="panel form-panel advanced-wide"><h3>سجل الإصدارات</h3><div class="release-list"><div><strong>${VERSION}</strong><p>لوحة التنفيذ السنوية، الحضور، الشهادات، مؤشرات KPI، التنبيهات، وضع الشاشة، الأرشيف وتصدير PowerPoint.</p></div><div><strong>1.0.0-rc.1</strong><p>التقارير المتقدمة، الجدولة، سلة المحذوفات، الصلاحيات المحلية، الوضع الداكن، PWA وصفحة حالة النظام.</p></div><div><strong>0.9.0</strong><p>بنك الأسئلة، تخصيص التقييم، القوالب، التنبيهات وسجل النشاط.</p></div></div></article>
         <article class="panel form-panel advanced-wide"><h3>اختصارات لوحة المفاتيح</h3><div class="shortcut-grid"><span><kbd>Alt</kbd> + <kbd>N</kbd> إضافة برنامج</span><span><kbd>Alt</kbd> + <kbd>D</kbd> لوحة المتابعة</span><span><kbd>Alt</kbd> + <kbd>R</kbd> التقارير</span><span><kbd>Alt</kbd> + <kbd>/</kbd> البحث</span></div></article>
       </div>`;
       main.appendChild(section);section.querySelector('#runHealthCheck').onclick=renderHealth;
     }
-    applyPermissions();renderHealth();registerPwa();
+    applyPermissions();renderHealth();registerPwa();loadStrategicSuite();
   }
 
   function toggleTheme(){const next=document.documentElement.dataset.theme==='dark'?'light':'dark';document.documentElement.dataset.theme=next;localStorage.setItem(THEME_KEY,next)}
@@ -73,6 +73,11 @@
   function registerPwa(){
     if(!document.querySelector('link[rel="manifest"]')){const l=document.createElement('link');l.rel='manifest';l.href='manifest.webmanifest';document.head.appendChild(l)}
     if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
+  }
+
+  function loadStrategicSuite(){
+    if(!document.querySelector('link[href="strategic-suite.css"]')){const l=document.createElement('link');l.rel='stylesheet';l.href='strategic-suite.css';document.head.appendChild(l)}
+    if(!document.querySelector('script[src="strategic-suite.js"]')){const s=document.createElement('script');s.src='strategic-suite.js';document.body.appendChild(s)}
   }
 
   const originalNavigate=window.navigate||navigate;
