@@ -105,6 +105,47 @@
     getState:()=>({ready,syncing,pending,online:navigator.onLine})
   };
 
+  const legacyOpenEvaluation=window.openEvaluation;
+  const legacyOpenProgram=window.openProgram;
+  const evaluationUrl=id=>{
+    const program=(db.programs||[]).find(item=>String(item.id)===String(id));
+    return program?.evaluationUrl||'';
+  };
+
+  window.openEvaluation=id=>{
+    const url=evaluationUrl(id);
+    if(url){window.open(url,'_blank','noopener,noreferrer');return}
+    showToast?.('جارٍ تجهيز رابط Google Form، أعد المحاولة بعد لحظات');
+    window.IECCloud.sync();
+    if(typeof legacyOpenEvaluation==='function'&&!navigator.onLine)legacyOpenEvaluation(id);
+  };
+
+  window.shareLink=async id=>{
+    const program=(db.programs||[]).find(item=>String(item.id)===String(id));
+    const url=program?.evaluationUrl||'';
+    if(!url){showToast?.('رابط Google Form لم يجهز بعد');window.IECCloud.sync();return}
+    if(navigator.share)await navigator.share({title:`تقييم ${program.name}`,text:'نرجو تقييم مشاركتكم في البرنامج',url});
+    else{await navigator.clipboard.writeText(url);showToast?.('تم نسخ رابط Google Form للمشاركة')}
+  };
+
+  window.openProgram=id=>{
+    if(typeof legacyOpenProgram==='function')legacyOpenProgram(id);
+    const url=evaluationUrl(id);
+    if(!url)return;
+    const linkCard=[...document.querySelectorAll('#programDetails .detail-card')].find(card=>card.querySelector('.link-input'));
+    if(!linkCard)return;
+    const input=linkCard.querySelector('.link-input');
+    const qr=linkCard.querySelector('.qr-box img');
+    const buttons=linkCard.querySelectorAll('.inline-actions button');
+    if(input)input.value=url;
+    if(qr)qr.src=`https://quickchart.io/qr?size=180&text=${encodeURIComponent(url)}`;
+    if(buttons[0])buttons[0].onclick=async()=>{await navigator.clipboard.writeText(url);showToast?.('تم نسخ رابط Google Form')};
+    if(buttons[1])buttons[1].onclick=()=>window.shareLink(id);
+  };
+
+  const preview=document.querySelector('#previewEvaluation');
+  if(preview)preview.onclick=()=>{const first=(db.programs||[]).find(program=>program.evaluationUrl);if(first)window.openEvaluation(first.id);else showToast?.('أنشئ برنامجًا أولًا لمعاينة النموذج')};
+
   window.addEventListener('online',()=>{status('عاد الاتصال — جارٍ المزامنة…');syncChanges()});
   window.addEventListener('offline',()=>status('غير متصل — الحفظ محلي مؤقتًا',false));
   window.addEventListener('beforeunload',e=>{if(syncing||pending){e.preventDefault();e.returnValue=''}});
