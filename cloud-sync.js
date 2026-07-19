@@ -26,11 +26,7 @@
   }
 
   async function request(action,data={}){
-    const response=await fetch(API_URL,{
-      method:'POST',
-      headers:{'Content-Type':'text/plain;charset=utf-8'},
-      body:JSON.stringify({action,data})
-    });
+    const response=await fetch(API_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action,data})});
     if(!response.ok)throw new Error(`HTTP ${response.status}`);
     const payload=await response.json();
     if(!payload.ok)throw new Error(payload.error||'تعذر الاتصال بقاعدة البيانات');
@@ -50,7 +46,7 @@
   }
 
   async function migrateLocal(){
-    status('جارٍ نقل البيانات إلى Google Sheets…');
+    status('جارٍ نقل البيانات إلى قاعدة البيانات…');
     for(const program of db.programs||[])await request('programs.save',program);
     for(const evaluation of db.evaluations||[])await request('evaluations.save',evaluation);
     if(db.settings)await request('settings.save',db.settings);
@@ -60,21 +56,12 @@
     status('جارٍ الاتصال بقاعدة البيانات…');
     const cloud=await request('bootstrap');
     const hasCloudData=Array.isArray(cloud.programs)&&cloud.programs.length>0;
-    if(!hasCloudData&&Array.isArray(db.programs)&&db.programs.length){
-      await migrateLocal();
-      return request('bootstrap');
-    }
+    if(!hasCloudData&&Array.isArray(db.programs)&&db.programs.length){await migrateLocal();return request('bootstrap')}
     return cloud;
   }
 
   function applyCloud(cloud){
-    const localExtras={
-      questionBank:db.questionBank,
-      users:db.users,
-      notifications:db.notifications,
-      annualGoals:db.annualGoals,
-      archives:db.archives
-    };
+    const localExtras={questionBank:db.questionBank,users:db.users,notifications:db.notifications,annualGoals:db.annualGoals,archives:db.archives};
     db={...db,...localExtras,programs:cloud.programs||[],evaluations:cloud.evaluations||[],attendance:cloud.attendance||[],settings:{...(db.settings||{}),...(cloud.settings||{})},goals:cloud.goals||[],activityLog:cloud.activityLog||[]};
     localStorage.setItem(LOCAL_KEY,JSON.stringify(db));
     snapshot=plain({programs:db.programs,evaluations:db.evaluations,settings:db.settings});
@@ -88,33 +75,22 @@
       const oldPrograms=mapById(snapshot.programs),newPrograms=mapById(db.programs);
       for(const [id,item] of newPrograms){if(!oldPrograms.has(id)||changed(item,oldPrograms.get(id)))await request('programs.save',item)}
       for(const [id] of oldPrograms){if(!newPrograms.has(id))await request('programs.delete',{id})}
-
       const oldEvaluations=mapById(snapshot.evaluations);
       for(const item of db.evaluations||[]){if(!oldEvaluations.has(String(item.id)))await request('evaluations.save',item)}
-
       if(changed(db.settings||{},snapshot.settings||{}))await request('settings.save',db.settings||{});
       snapshot=plain({programs:db.programs,evaluations:db.evaluations,settings:db.settings});
       localStorage.setItem(LOCAL_KEY,JSON.stringify(db));
-      status('متصل بـ Google Sheets');
+      status('متصل بقاعدة البيانات');
     }catch(error){
       console.error('Cloud sync failed',error);status('تعذر الحفظ السحابي — محفوظ محليًا',false);showToast?.('تعذر الاتصال مؤقتًا؛ تم الاحتفاظ بالتغييرات محليًا');
-    }finally{
-      syncing=false;if(pending)setTimeout(syncChanges,150);
-    }
+    }finally{syncing=false;if(pending)setTimeout(syncChanges,150)}
   }
 
-  save=function(){
-    try{originalSave?.()}catch(_){localStorage.setItem(LOCAL_KEY,JSON.stringify(db))}
-    syncChanges();
-  };
-
-  window.IECCloud={apiUrl:API_URL,refresh:async()=>{const cloud=await request('bootstrap');applyCloud(cloud);status('متصل بـ Google Sheets')},sync:syncChanges};
+  save=function(){try{originalSave?.()}catch(_){localStorage.setItem(LOCAL_KEY,JSON.stringify(db))}syncChanges()};
+  window.IECCloud={apiUrl:API_URL,refresh:async()=>{const cloud=await request('bootstrap');applyCloud(cloud);status('متصل بقاعدة البيانات')},sync:syncChanges};
 
   (async()=>{
-    try{
-      const cloud=await loadCloud();applyCloud(cloud);ready=true;status('متصل بـ Google Sheets');
-    }catch(error){
-      console.error('Cloud initialization failed',error);ready=true;status('يعمل محليًا — تعذر الاتصال',false);
-    }
+    try{const cloud=await loadCloud();applyCloud(cloud);ready=true;status('متصل بقاعدة البيانات')}
+    catch(error){console.error('Cloud initialization failed',error);ready=true;status('يعمل محليًا — تعذر الاتصال بقاعدة البيانات',false)}
   })();
 })();
