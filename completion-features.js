@@ -63,3 +63,5 @@
 
   setTimeout(()=>{ensureCompletionUI();renderCompletionDashboard();renderTrash();const oldNav=window.navigate||navigate;window.navigate=function(id){oldNav(id);ensureCompletionUI();if(id==='dashboard')renderCompletionDashboard();if(id==='settings')renderTrash()};},100);
 })();
+if(!document.querySelector('link[href="insights-reports.css"]')){const l=document.createElement('link');l.rel='stylesheet';l.href='insights-reports.css';document.head.appendChild(l)}
+if(!document.querySelector('script[src="insights-reports.js"]')){const s=document.createElement('script');s.src='insights-reports.js';document.body.appendChild(s)}
