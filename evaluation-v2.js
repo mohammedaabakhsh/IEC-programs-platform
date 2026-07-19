@@ -8,18 +8,19 @@
   const formStep=document.querySelector('#evaluationFormStep');
   const success=document.querySelector('#evaluationSuccess');
   const unavailable=document.querySelector('#evaluationUnavailable');
-  const startBtn=document.querySelector('#startEvaluation');
   const closeSuccess=document.querySelector('#closeEvaluationSuccess');
-  const attendanceYes=document.querySelector('#attendanceYes');
-  const attendanceNo=document.querySelector('#attendanceNo');
-  const attendanceMessage=document.querySelector('#attendanceMessage');
   const progress=document.querySelector('#evaluationProgressBar');
   let activeProgram=null;
-  let attended=null;
 
   function setStep(step){
     [intro,formStep,success,unavailable].forEach(el=>el&&el.classList.remove('active'));
     step?.classList.add('active');
+  }
+
+  function showEvaluationForm(){
+    [intro,formStep,success,unavailable].forEach(el=>el&&el.classList.remove('active'));
+    intro.classList.add('active');
+    formStep.classList.add('active');
   }
 
   function fillProgram(p){
@@ -53,10 +54,6 @@
     const p=db.programs.find(x=>x.id===id);
     modal.classList.add('show');
     form.reset();
-    attended=null;
-    attendanceYes.classList.remove('selected');
-    attendanceNo.classList.remove('selected');
-    attendanceMessage.textContent='';
     progress.style.width='0%';
     if(!p){setStep(unavailable);return;}
     activeProgram=p;
@@ -64,25 +61,16 @@
     form.elements.programId.value=p.id;
     fillProgram(p);
     buildQuestions();
-    setStep(intro);
-  };
-
-  attendanceYes.onclick=()=>{
-    attended=true;
-    attendanceYes.classList.add('selected');
-    attendanceNo.classList.remove('selected');
-    attendanceMessage.textContent='';
-  };
-  attendanceNo.onclick=()=>{
-    attended=false;
-    attendanceNo.classList.add('selected');
-    attendanceYes.classList.remove('selected');
-    attendanceMessage.textContent='هذا التقييم مخصص لمن حضر البرنامج.';
-  };
-
-  startBtn.onclick=()=>{
-    if(attended!==true){attendanceMessage.textContent=attended===false?'هذا التقييم مخصص لمن حضر البرنامج.':'اختر هل حضرت البرنامج أولًا.';return;}
-    setStep(formStep);
+    showEvaluationForm();
+    const attendanceTitle=document.querySelector('#evaluationIntro > strong');
+    const attendanceBox=document.querySelector('.attendance-box');
+    const attendanceMessage=document.querySelector('#attendanceMessage');
+    const startBtn=document.querySelector('#startEvaluation');
+    if(attendanceTitle)attendanceTitle.style.display='none';
+    if(attendanceBox)attendanceBox.style.display='none';
+    if(attendanceMessage)attendanceMessage.style.display='none';
+    if(startBtn)startBtn.style.display='none';
+    setTimeout(()=>document.querySelector('#evaluationFormStep')?.scrollIntoView({block:'nearest'}),100);
   };
 
   form.onsubmit=e=>{
@@ -98,7 +86,6 @@
     renderDashboard();
     renderEvaluations();
     renderReports();
-    if(currentProgramId===entry.programId) setTimeout(()=>openProgram(entry.programId),300);
   };
 
   closeBtn.onclick=()=>modal.classList.remove('show');
