@@ -4,7 +4,6 @@
 
   const esc=window.escapeHtml||((v='')=>String(v));
   const scoreOf=p=>{const m=metrics(p);return m.score||0};
-  const stateOf=p=>window.programState?programState(p):status(p);
 
   function ensureCompletionUI(){
     const dashboard=document.querySelector('#dashboard');
@@ -17,7 +16,7 @@
       const card=document.createElement('article');card.id='dataManagementCard';card.className='panel form-panel advanced-wide';
       card.innerHTML=`<div class="panel-head"><div><small>الاستيراد والأرشفة والاستعادة</small><h3>إدارة البيانات</h3></div></div>
       <div class="completion-actions"><label class="secondary-btn file-button">استيراد نسخة JSON<input id="importJson" type="file" accept="application/json,.json"></label><button class="secondary-btn" id="archivePreviousYears">أرشفة السنوات السابقة</button></div>
-      <div class="panel-head trash-head"><div><small>البرامج المحذوفة مؤقتًا</small><h3>سلة المحذوفات</h3></div><span id="trashCount" class="type-chip">0</span></div><div id="trashList" class="trash-list"></div>`;
+      <div class="panel-head trash-head"><div><small>البرامج المحذوفة مؤقتًا من Google Sheets</small><h3>سلة المحذوفات</h3></div><span id="trashCount" class="type-chip">0</span></div><div id="trashList" class="trash-list"></div>`;
       settings.appendChild(card);
       card.querySelector('#importJson').onchange=importJson;
       card.querySelector('#archivePreviousYears').onclick=archivePreviousYears;
@@ -45,23 +44,46 @@
 
   function moveToTrash(id){
     const p=db.programs.find(x=>x.id===id);if(!p)return;
-    const evals=db.evaluations.filter(e=>e.programId===id);
-    db.trash.unshift({program:structuredClone(p),evaluations:structuredClone(evals),deletedAt:new Date().toISOString()});
-    db.programs=db.programs.filter(x=>x.id!==id);db.evaluations=db.evaluations.filter(e=>e.programId!==id);save();
+    const evals=db.evaluations.filter(e=>e.programId===id),attendance=(db.attendance||[]).filter(a=>a.programId===id);
+    db.trash.unshift({program:structuredClone(p),evaluations:structuredClone(evals),attendance:structuredClone(attendance),deletedAt:new Date().toISOString()});
+    db.programs=db.programs.filter(x=>x.id!==id);
+    save();
     document.querySelector('#confirmModal')?.classList.remove('show');renderPrograms();renderDashboard();renderEvaluations();renderReports();renderTrash();window.addActivity?.('نقل برنامج إلى سلة المحذوفات',p.name);showToast('تم نقل البرنامج إلى سلة المحذوفات');
   }
-  function renderTrash(){const list=document.querySelector('#trashList'),count=document.querySelector('#trashCount');if(!list)return;if(count)count.textContent=db.trash.length;list.innerHTML=db.trash.length?db.trash.map((x,i)=>`<div class="trash-item"><div><strong>${esc(x.program.name)}</strong><small>${new Intl.DateTimeFormat('ar-SA',{dateStyle:'medium'}).format(new Date(x.deletedAt))}</small></div><div class="inline-actions"><button class="secondary-btn" onclick="restoreTrash(${i})">استعادة</button><button class="danger-btn" onclick="deleteTrashPermanently(${i})">حذف نهائي</button></div></div>`).join(''):'<p class="muted">سلة المحذوفات فارغة.</p>'}
-  window.restoreTrash=i=>{const x=db.trash[i];if(!x)return;db.programs.unshift(x.program);db.evaluations.push(...x.evaluations);db.trash.splice(i,1);save();renderTrash();renderPrograms();renderDashboard();window.addActivity?.('استعادة برنامج',x.program.name);showToast('تمت استعادة البرنامج')};
-  window.deleteTrashPermanently=i=>{const x=db.trash[i];if(!x||!confirm('حذف البرنامج نهائيًا؟ لا يمكن التراجع.'))return;db.trash.splice(i,1);save();renderTrash();window.addActivity?.('حذف نهائي',x.program.name);showToast('تم الحذف النهائي')};
 
-  async function importJson(e){const file=e.target.files?.[0];if(!file)return;try{const data=JSON.parse(await file.text());if(!Array.isArray(data.programs)||!Array.isArray(data.evaluations))throw new Error();if(!confirm('سيتم استبدال البيانات الحالية بالنسخة المستوردة.'))return;db=data;db.trash=Array.isArray(db.trash)?db.trash:[];save();location.reload()}catch{showToast('ملف النسخة الاحتياطية غير صالح')}finally{e.target.value=''}}
+  function renderTrash(){
+    const list=document.querySelector('#trashList'),count=document.querySelector('#trashCount');if(!list)return;
+    if(count)count.textContent=db.trash.length;
+    list.innerHTML=db.trash.length?db.trash.map((x,i)=>`<div class="trash-item"><div><strong>${esc(x.program.name)}</strong><small>${new Intl.DateTimeFormat('ar-SA',{dateStyle:'medium'}).format(new Date(x.deletedAt))}</small></div><div class="inline-actions"><button class="secondary-btn" onclick="restoreTrash(${i})">استعادة</button><button class="danger-btn" onclick="deleteTrashPermanently(${i})">حذف نهائي</button></div></div>`).join(''):'<p class="muted">سلة المحذوفات فارغة.</p>';
+  }
+  window.renderTrash=renderTrash;
+
+  window.restoreTrash=async i=>{
+    const x=db.trash[i];if(!x)return;
+    try{
+      if(window.IECCloud?.restoreProgram){showToast('جارٍ استعادة البرنامج…');await window.IECCloud.restoreProgram(x.program.id)}
+      else{db.programs.unshift({...x.program,deletedAt:''});db.trash.splice(i,1);save();renderTrash();renderPrograms();renderDashboard()}
+      window.addActivity?.('استعادة برنامج',x.program.name);showToast('تمت استعادة البرنامج من Google Sheets');
+    }catch(error){console.error(error);showToast('تعذرت الاستعادة؛ تحقق من الاتصال')}
+  };
+
+  window.deleteTrashPermanently=async i=>{
+    const x=db.trash[i];if(!x||!confirm('حذف البرنامج وجميع تقييماته وحضوره نهائيًا؟ لا يمكن التراجع.'))return;
+    try{
+      if(window.IECCloud?.deleteProgramPermanent){showToast('جارٍ الحذف النهائي…');await window.IECCloud.deleteProgramPermanent(x.program.id)}
+      else{db.trash.splice(i,1);save();renderTrash()}
+      window.addActivity?.('حذف نهائي',x.program.name);showToast('تم الحذف النهائي من Google Sheets');
+    }catch(error){console.error(error);showToast('تعذر الحذف النهائي؛ تحقق من الاتصال')}
+  };
+
+  async function importJson(e){const file=e.target.files?.[0];if(!file)return;try{const data=JSON.parse(await file.text());if(!Array.isArray(data.programs)||!Array.isArray(data.evaluations))throw new Error();if(!confirm('سيتم استبدال البيانات الحالية بالنسخة المستوردة وإرسالها إلى Google Sheets.'))return;db=data;db.trash=Array.isArray(db.trash)?db.trash:[];db.attendance=Array.isArray(db.attendance)?db.attendance:[];save();showToast('جارٍ مزامنة النسخة المستوردة…')}catch{showToast('ملف النسخة الاحتياطية غير صالح')}finally{e.target.value=''}}
   function archivePreviousYears(){const year=new Date().getFullYear();let count=0;db.programs.forEach(p=>{if(Number(String(p.date).slice(0,4))<year){p.settings={...(p.settings||{}),archived:true};count++}});save();renderPrograms();renderDashboard();window.addActivity?.('أرشفة سنوية',`${count} برنامج`);showToast(count?`تمت أرشفة ${count} برنامج`:'لا توجد برامج من سنوات سابقة')}
 
   const oldConfirm=document.querySelector('#confirmDelete');if(oldConfirm)oldConfirm.onclick=()=>moveToTrash(window.deleteTarget||deleteTarget);
   const oldDashboard=window.renderDashboard||renderDashboard;window.renderDashboard=function(){oldDashboard();renderCompletionDashboard()};
   const oldReports=window.renderReports||renderReports;window.renderReports=function(){oldReports();const sort=document.querySelector('#reportSort')?.value;if(!sort)return;const body=document.querySelector('#reportsTable');if(!body)return;const rows=[...body.rows];rows.sort((a,b)=>{if(sort==='name-asc')return a.cells[0].textContent.localeCompare(b.cells[0].textContent,'ar');const pa=db.programs.find(p=>p.name===a.cells[0].textContent),pb=db.programs.find(p=>p.name===b.cells[0].textContent);if(sort==='score-desc')return scoreOf(pb)-scoreOf(pa);if(sort==='response-desc')return metrics(pb).response-metrics(pa).response;return (pb?.date||'').localeCompare(pa?.date||'')});rows.forEach(r=>body.appendChild(r))};
 
-  setTimeout(()=>{ensureCompletionUI();renderCompletionDashboard();renderTrash();const oldNav=window.navigate||navigate;window.navigate=function(id){oldNav(id);ensureCompletionUI();if(id==='dashboard')renderCompletionDashboard();if(id==='settings')renderTrash()};},100);
+  setTimeout(()=>{ensureCompletionUI();renderCompletionDashboard();renderTrash();const oldNav=window.navigate||navigate;window.navigate=function(id){oldNav(id);ensureCompletionUI();if(id==='dashboard')renderCompletionDashboard();if(id==='settings')renderTrash()}},100);
 })();
 if(!document.querySelector('link[href="insights-reports.css"]')){const l=document.createElement('link');l.rel='stylesheet';l.href='insights-reports.css';document.head.appendChild(l)}
 if(!document.querySelector('script[src="insights-reports.js"]')){const s=document.createElement('script');s.src='insights-reports.js';document.body.appendChild(s)}
