@@ -11,6 +11,7 @@
   const API_URL='https://script.google.com/macros/s/AKfycbzaruDNufAdhYJVZvuAGVMQzTvFGMfR2JSMNRZcuzPJRqqXbpeSB_xnieoRvpPKBqv4Pw/exec';
   const LOCAL_KEY=typeof DB_KEY==='string'?DB_KEY:'iec-platform-v2';
   const FORM_SETUP_KEY='iec-google-form-setup-v2';
+  const CONFLICT_CODE='PROGRAM_VERSION_CONFLICT';
   let ready=false,syncing=false,pending=false;
   let snapshot={programs:[],evaluations:[],attendance:[],settings:{}};
   const originalSave=typeof save==='function'?save:null;
@@ -77,9 +78,27 @@
     snapshot=snapshotNow();renderAll();
   }
 
+  async function assertProgramVersion(id,oldItem){
+    if(!oldItem?.updatedAt)return;
+    const remotePrograms=await request('programs.list');
+    const remote=(remotePrograms||[]).find(item=>String(item.id)===String(id));
+    if(!remote)return;
+    if(String(remote.updatedAt||'')!==String(oldItem.updatedAt||'')){
+      const error=new Error('تم تعديل هذا البرنامج من جهاز آخر. تم تحميل أحدث نسخة، أعد إدخال تعديلك عليها.');
+      error.code=CONFLICT_CODE;
+      throw error;
+    }
+  }
+
   async function syncCollection(actionSave,actionDelete,oldList,newList){
     const oldMap=mapById(oldList),newMap=mapById(newList);
-    for(const [id,item] of newMap){if(!oldMap.has(id)||changed(item,oldMap.get(id)))await request(actionSave,item)}
+    for(const [id,item] of newMap){
+      const oldItem=oldMap.get(id);
+      if(!oldItem||changed(item,oldItem)){
+        if(actionSave==='programs.save'&&oldItem)await assertProgramVersion(id,oldItem);
+        await request(actionSave,item);
+      }
+    }
     if(actionDelete)for(const [id] of oldMap){if(!newMap.has(id))await request(actionDelete,{id})}
   }
 
@@ -110,8 +129,15 @@
       applyCloud(cloud);
       status('متصل بقاعدة البيانات');
     }catch(error){
-      pending=true;console.error('Cloud sync failed',error);status('تعذر الحفظ السحابي — سيُعاد تلقائيًا',false);
-      showToast?.('تعذر الاتصال مؤقتًا؛ التغييرات محفوظة على هذا الجهاز وستُرسل عند عودة الاتصال');
+      if(error?.code===CONFLICT_CODE){
+        pending=false;
+        try{const cloud=await request('bootstrap');applyCloud(cloud)}catch(refreshError){console.error('Conflict refresh failed',refreshError)}
+        status('تم تحميل أحدث نسخة بعد تعارض تعديل',false);
+        showToast?.(error.message);
+      }else{
+        pending=true;console.error('Cloud sync failed',error);status('تعذر الحفظ السحابي — سيُعاد تلقائيًا',false);
+        showToast?.('تعذر الاتصال مؤقتًا؛ التغييرات محفوظة على هذا الجهاز وستُرسل عند عودة الاتصال');
+      }
     }finally{syncing=false;if(pending&&navigator.onLine)setTimeout(syncChanges,1200)}
   }
 
