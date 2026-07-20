@@ -19,6 +19,17 @@
     try{renderDashboard?.();renderPrograms?.();renderEvaluations?.();renderReports?.();if(currentProgramId)openProgram?.(currentProgramId)}catch(error){console.warn('Metadata render warning',error)}
   }
 
+  function programName(id){return (db.programs||[]).find(program=>String(program.id)===String(id))?.name||id}
+
+  function metadataChangeDetails(id,before,after){
+    const parts=[];
+    if(changed(before?.settings,after?.settings))parts.push('إعدادات البرنامج');
+    if(changed(before?.questionnaireMode,after?.questionnaireMode))parts.push('وضع الاستبيان');
+    if(changed(before?.questionnaire,after?.questionnaire))parts.push('أسئلة الاستبيان');
+    if(!after)parts.push('حذف بيانات البرنامج المتقدمة');
+    return `${programName(id)} (${id}) — ${parts.join('، ')||'تحديث بيانات متقدمة'}`;
+  }
+
   async function hydrate(){
     if(!window.IECCloud?.request||!navigator.onLine)return;
     const settings=await window.IECCloud.request('settings.get');
@@ -42,13 +53,15 @@
     saving=true;pending=false;
     try{
       const local=metadataFromPrograms();
-      const ids=new Set([...Object.keys(local),...Object.keys(lastMeta||{})]);
-      const changedIds=[...ids].filter(id=>changed(local[id],lastMeta?.[id]));
+      const previous=clone(lastMeta)||{};
+      const ids=new Set([...Object.keys(local),...Object.keys(previous)]);
+      const changedIds=[...ids].filter(id=>changed(local[id],previous[id]));
       if(!changedIds.length)return;
       const settings=await window.IECCloud.request('settings.get');
       const merged={...(settings?.[KEY]||{})};
       changedIds.forEach(id=>{if(local[id])merged[id]=local[id];else delete merged[id]});
       await window.IECCloud.request('settings.save',{[KEY]:merged});
+      for(const id of changedIds)await window.IECCloud.audit?.('تعديل بيانات البرنامج المتقدمة',metadataChangeDetails(id,previous[id],local[id]));
       lastMeta=clone(merged)||{};
       db.settings={...(db.settings||{}),[KEY]:merged};
       localStorage.setItem(typeof DB_KEY==='string'?DB_KEY:'iec-platform-v2',JSON.stringify(db));
