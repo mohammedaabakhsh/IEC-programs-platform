@@ -13,6 +13,7 @@
   const API_URL='https://script.google.com/macros/s/AKfycbzaruDNufAdhYJVZvuAGVMQzTvFGMfR2JSMNRZcuzPJRqqXbpeSB_xnieoRvpPKBqv4Pw/exec';
   const LOCAL_KEY=typeof DB_KEY==='string'?DB_KEY:'iec-platform-v2';
   const FORM_SETUP_KEY='iec-google-form-setup-v2';
+  const DEVICE_KEY='iec-audit-device-v1';
   const CONFLICT_CODE='PROGRAM_VERSION_CONFLICT';
   const POLL_INTERVAL=30000;
   let ready=false,syncing=false,pending=false,polling=false,queuedCloud=null,pollTimer=null;
@@ -54,6 +55,28 @@
   const snapshotNow=()=>plain({programs:db.programs||[],evaluations:db.evaluations||[],attendance:db.attendance||[],settings:db.settings||{}});
   const cloudFingerprint=cloud=>JSON.stringify({programs:cloud.programs||[],deletedPrograms:cloud.deletedPrograms||[],evaluations:cloud.evaluations||[],attendance:cloud.attendance||[],settings:cloud.settings||{},goals:cloud.goals||[],activityLog:cloud.activityLog||[]});
   const localCloudFingerprint=()=>JSON.stringify({programs:snapshot.programs||[],deletedPrograms:(db.trash||[]).map(x=>x.program||x),evaluations:snapshot.evaluations||[],attendance:snapshot.attendance||[],settings:snapshot.settings||{},goals:db.goals||[],activityLog:db.activityLog||[]});
+  const fieldLabels={name:'اسم البرنامج',type:'نوع النشاط',date:'التاريخ',audience:'الفئة المستهدفة',participants:'عدد المشاركين',organizer:'الجهة المنظمة',trainer:'المدرب أو مقدم الجلسة',description:'الوصف'};
+  const programName=id=>(db.programs||[]).find(item=>String(item.id)===String(id))?.name||String(id||'برنامج غير محدد');
+
+  function auditActor(){
+    let id=localStorage.getItem(DEVICE_KEY);
+    if(!id){id=Math.random().toString(36).slice(2,8).toUpperCase();localStorage.setItem(DEVICE_KEY,id)}
+    const platform=/iPhone|iPad|iPod/.test(navigator.userAgent)?'iPhone/iPad':/Android/.test(navigator.userAgent)?'Android':'متصفح ويب';
+    return `مستخدم المنصة — ${platform} (${id})`;
+  }
+
+  async function addAudit(action,details){
+    try{return await request('activity.add',{action,details,actor:auditActor()})}
+    catch(error){console.warn('Activity audit logging failed',error);return null}
+  }
+
+  function changedProgramFields(before,after){
+    return Object.keys(fieldLabels).filter(key=>changed(before?.[key],after?.[key])).map(key=>{
+      const oldValue=String(before?.[key]??'').trim()||'فارغ';
+      const newValue=String(after?.[key]??'').trim()||'فارغ';
+      return `${fieldLabels[key]}: «${oldValue}» ← «${newValue}»`;
+    });
+  }
 
   function isEditing(){
     const active=document.querySelector('.view.active-view');
@@ -104,16 +127,35 @@
     }
   }
 
-  async function syncCollection(actionSave,actionDelete,oldList,newList){
+  async function auditSavedItem(kind,item,oldItem){
+    if(kind==='programs'&&oldItem){
+      const fields=changedProgramFields(oldItem,item);
+      if(fields.length)await addAudit('تفاصيل تعديل برنامج',`${item.name} (${item.id}) — ${fields.join(' | ')}`);
+    }
+    if(kind==='evaluations'&&!oldItem){
+      const scores=['content','organization','trainer','goals','benefit'].map(key=>Number(item[key]||0)).filter(Number.isFinite);
+      const average=scores.length?(scores.reduce((sum,value)=>sum+value,0)/scores.length).toFixed(2):'غير متاح';
+      await addAudit('استلام تقييم جديد',`${programName(item.programId)} — متوسط التقييم ${average} من 5 — المعرّف ${item.id}`);
+    }
+    if(kind==='attendance'&&!oldItem)await addAudit('تسجيل حضور',`${item.name||'مشارك'} — ${programName(item.programId)}${item.email?` — ${item.email}`:''}`);
+  }
+
+  async function auditDeletedItem(kind,item){
+    if(kind==='evaluations')await addAudit('حذف تقييم',`${programName(item.programId)} — المعرّف ${item.id}`);
+    if(kind==='attendance')await addAudit('حذف تسجيل حضور',`${item.name||'مشارك'} — ${programName(item.programId)}`);
+  }
+
+  async function syncCollection(kind,actionSave,actionDelete,oldList,newList){
     const oldMap=mapById(oldList),newMap=mapById(newList);
     for(const [id,item] of newMap){
       const oldItem=oldMap.get(id);
       if(!oldItem||changed(item,oldItem)){
         if(actionSave==='programs.save'&&oldItem)await assertProgramVersion(id,oldItem);
         await request(actionSave,item);
+        await auditSavedItem(kind,item,oldItem);
       }
     }
-    if(actionDelete)for(const [id] of oldMap){if(!newMap.has(id))await request(actionDelete,{id})}
+    if(actionDelete)for(const [id,oldItem] of oldMap){if(!newMap.has(id)){await request(actionDelete,{id});await auditDeletedItem(kind,oldItem)}}
   }
 
   async function ensureGoogleForm(){
@@ -148,10 +190,14 @@
     if(!navigator.onLine){pending=true;status('بانتظار عودة الإنترنت — محفوظ محليًا',false);return}
     syncing=true;pending=false;status('جارٍ حفظ التغييرات…');
     try{
-      await syncCollection('programs.save','programs.delete',snapshot.programs,db.programs||[]);
-      await syncCollection('evaluations.save','evaluations.delete',snapshot.evaluations,db.evaluations||[]);
-      await syncCollection('attendance.save','attendance.delete',snapshot.attendance,db.attendance||[]);
-      if(changed(db.settings||{},snapshot.settings||{}))await request('settings.save',db.settings||{});
+      await syncCollection('programs','programs.save','programs.delete',snapshot.programs,db.programs||[]);
+      await syncCollection('evaluations','evaluations.save','evaluations.delete',snapshot.evaluations,db.evaluations||[]);
+      await syncCollection('attendance','attendance.save','attendance.delete',snapshot.attendance,db.attendance||[]);
+      if(changed(db.settings||{},snapshot.settings||{})){
+        const changedKeys=[...new Set([...Object.keys(snapshot.settings||{}),...Object.keys(db.settings||{})])].filter(key=>key!=='programMetadata'&&changed(snapshot.settings?.[key],db.settings?.[key]));
+        await request('settings.save',db.settings||{});
+        if(changedKeys.length)await addAudit('تعديل إعدادات المنصة',changedKeys.join('، '));
+      }
       const cloud=await request('bootstrap');applyCloud(cloud);queuedCloud=null;status('متصل بقاعدة البيانات');
     }catch(error){
       if(error?.code===CONFLICT_CODE){
@@ -167,7 +213,7 @@
 
   save=function(){try{originalSave?.()}catch(_){localStorage.setItem(LOCAL_KEY,JSON.stringify(db))}pending=true;syncChanges()};
 
-  window.IECCloud={apiUrl:API_URL,request,refresh:async()=>{const cloud=await request('bootstrap');applyCloud(cloud);queuedCloud=null;status('متصل بقاعدة البيانات')},sync:syncChanges,poll:pollCloud,setupEvaluationForm:async()=>ensureGoogleForm(),restoreProgram:async id=>{await request('programs.restore',{id});await window.IECCloud.refresh()},deleteProgramPermanent:async id=>{await request('programs.deletePermanent',{id});await window.IECCloud.refresh()},getState:()=>({ready,syncing,pending,polling,queuedUpdate:!!queuedCloud,online:navigator.onLine})};
+  window.IECCloud={apiUrl:API_URL,request,refresh:async()=>{const cloud=await request('bootstrap');applyCloud(cloud);queuedCloud=null;status('متصل بقاعدة البيانات')},sync:syncChanges,poll:pollCloud,audit:addAudit,setupEvaluationForm:async()=>ensureGoogleForm(),restoreProgram:async id=>{await request('programs.restore',{id});await window.IECCloud.refresh()},deleteProgramPermanent:async id=>{await request('programs.deletePermanent',{id});await window.IECCloud.refresh()},getState:()=>({ready,syncing,pending,polling,queuedUpdate:!!queuedCloud,online:navigator.onLine})};
 
   const legacyOpenEvaluation=window.openEvaluation;
   const legacyOpenProgram=window.openProgram;
